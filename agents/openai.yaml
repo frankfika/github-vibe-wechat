@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Vibe WeChat"
+  short_description: "将 GitHub Vibe Coding 项目写成公众号文章"
+  default_prompt: "Use $github-vibe-wechat to turn my GitHub Vibe Coding project into a publishable WeChat article."
