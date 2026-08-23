@@ -42,8 +42,9 @@ export default function SettingsPage() {
                 <button
                   key={p}
                   onClick={() => togglePlatform(p)}
+                  aria-pressed={cfg.defaultPlatforms.includes(p)}
                   className={
-                    'h-7 px-2.5 rounded-full text-xs border ' +
+                    'h-8 px-3 rounded-full text-xs border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ' +
                     (cfg.defaultPlatforms.includes(p)
                       ? 'bg-ink text-white border-ink'
                       : 'bg-white text-ink-soft border-ink-line hover:border-ink')

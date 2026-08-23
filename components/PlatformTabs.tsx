@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Copy, Check, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from './ui/button';
+import { useToast } from './ui/toast';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { PLATFORMS, PLATFORM_ORDER } from '@/src/lib/platforms';
 import type { Article, PlatformId } from '@/src/lib/types';
@@ -24,6 +25,13 @@ export function PlatformTabs({
   const available = (article.brief.platforms.length ? article.brief.platforms : PLATFORM_ORDER) as PlatformId[];
   const [tab, setTab] = React.useState<PlatformId>(available[0] ?? 'wechat');
   const [copied, setCopied] = React.useState<PlatformId | null>(null);
+  const { push } = useToast();
+
+  // 切文章 / 改平台集合时，若当前 tab 已不在其中则回落到第一个。
+  React.useEffect(() => {
+    setTab((cur) => (available.includes(cur) ? cur : (available[0] ?? 'wechat')));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article.id, article.brief.platforms.join(',')]);
 
   const draft = article.platformDrafts[tab] ?? '';
   const spec = PLATFORMS[tab];
@@ -33,6 +41,8 @@ export function PlatformTabs({
     if (ok) {
       setCopied(tab);
       setTimeout(() => setCopied(null), 1800);
+    } else {
+      push('error', `${spec.label} 复制失败：浏览器拒绝了剪贴板访问。`);
     }
   };
 

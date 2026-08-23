@@ -2,10 +2,13 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { FileText, Plus, Sparkles, Smartphone, Copy, Layers } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { FileText, Plus, Sparkles, Smartphone, Layers } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { useArticleStore } from '@/src/lib/store';
+import { useAiStatus } from '@/src/lib/useAiStatus';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/cn';
 import type { Brief } from '@/src/lib/types';
 import { loadConfig } from '@/src/lib/config';
 
@@ -13,11 +16,11 @@ export default function HomePage() {
   const hydrate = useArticleStore((s) => s.hydrate);
   const articles = useArticleStore((s) => s.articles);
   const create = useArticleStore((s) => s.create);
+  const router = useRouter();
+  const aiReady = useAiStatus();
   const [mounted, setMounted] = React.useState(false);
-  const [aiReady, setAiReady] = React.useState<boolean | null>(null);
   React.useEffect(() => {
     hydrate(); setMounted(true);
-    fetch('/api/ai-status').then((r) => r.json()).then((d: { configured: boolean }) => setAiReady(d.configured)).catch(() => setAiReady(false));
   }, [hydrate]);
 
   const onNew = (preset: Partial<Brief> = {}) => {
@@ -32,7 +35,7 @@ export default function HomePage() {
       bilingual: cfg.bilingual,
       ...preset,
     } as Brief);
-    location.assign(`/article/${a.id}`);
+    router.push(`/article/${a.id}`);
   };
 
   return (
@@ -76,9 +79,12 @@ export default function HomePage() {
             ))}
           </ul>
 
-          <div className="mt-12 text-xs text-ink-muted">
-            AI 状态：{aiReady === null ? '检测中…' : aiReady ? '已配置' : '未配置（设置 .env.local 后重启）'}。
-            当前默认配置可在<a className="underline" href="/settings">设置</a>里改。
+          <div className="mt-12 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-ink-panel px-2.5 py-1 border border-ink-line">
+              <span className={cn(aiReady === null ? 'bg-ink-muted' : aiReady ? 'bg-emerald-600' : 'bg-red-600', 'h-1.5 w-1.5 rounded-full')} />
+              AI：{aiReady === null ? '检测中…' : aiReady ? '已配置' : '未配置'}
+            </span>
+            <span>默认配置可在<a className="underline hover:text-ink" href="/settings">设置</a>里改。</span>
           </div>
         </div>
       </div>
@@ -88,7 +94,7 @@ export default function HomePage() {
 
 function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
-    <div className="rounded-lg border border-ink-line bg-white p-4">
+    <div className="rounded-md border border-ink-line bg-white p-4">
       <div className="flex items-center gap-2 mb-1.5 text-ink">{icon}<div className="text-sm font-medium">{title}</div></div>
       <div className="text-[13px] text-ink-soft leading-relaxed">{body}</div>
     </div>

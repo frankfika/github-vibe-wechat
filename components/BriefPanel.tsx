@@ -5,6 +5,8 @@ import { Sparkles, Loader2, Link as LinkIcon } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input, Textarea } from './ui/input';
 import { Select } from './ui/select';
+import { useToast } from './ui/toast';
+import { useAiStatus } from '@/src/lib/useAiStatus';
 import { cn } from './ui/cn';
 import type { Brief, MaterialType, PlatformId, Voice } from '@/src/lib/types';
 import { PLATFORM_ORDER, PLATFORMS } from '@/src/lib/platforms';
@@ -26,15 +28,8 @@ const MATERIAL_OPTIONS: { value: MaterialType; label: string }[] = [
 
 export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
   const [fetching, setFetching] = React.useState(false);
-  const [aiReady, setAiReady] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
-    let alive = true;
-    fetch('/api/ai-status')
-      .then((r) => r.json())
-      .then((d: { configured: boolean }) => alive && setAiReady(d.configured))
-      .catch(() => alive && setAiReady(false));
-    return () => { alive = false; };
-  }, []);
+  const aiReady = useAiStatus();
+  const { push } = useToast();
 
   const update = (patch: Partial<Brief>) => onChange({ ...brief, ...patch });
 
@@ -57,9 +52,14 @@ export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
       });
       if (!res.ok) throw new Error(`抓取失败 (HTTP ${res.status})`);
       const { text } = (await res.json()) as { text: string | null };
-      if (text) update({ material: `${brief.material}\n\n---\n${text}` });
+      if (text) {
+        update({ material: `${brief.material}\n\n---\n${text}` });
+        push('success', '已抓取正文');
+      } else {
+        push('error', '该链接未抓到正文，请检查地址。');
+      }
     } catch (e) {
-      alert((e as Error).message || '抓取失败');
+      push('error', (e as Error).message || '抓取失败');
     } finally {
       setFetching(false);
     }
@@ -98,7 +98,7 @@ export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
             className="flex-1"
           />
           {brief.materialType === 'news' && (
-            <Button variant="outline" size="md" onClick={onPickUrl} disabled={fetching} title="抓取链接正文">
+            <Button variant="outline" size="md" onClick={onPickUrl} disabled={fetching || !/^https?:\/\//i.test(brief.material)} aria-label={fetching ? '抓取正文链接中…' : '抓取链接正文'} title={fetching ? '抓取中…' : '抓取链接正文'}>
               {fetching ? <Loader2 size={14} className="animate-spin"/> : <LinkIcon size={14}/>}
             </Button>
           )}
@@ -199,8 +199,10 @@ function PlatformChip({ active, onClick, children }: { active: boolean; onClick:
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
-        'h-7 px-2.5 rounded-full text-xs border transition-colors',
+        'h-8 px-3 rounded-full text-xs border transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink',
         active ? 'bg-ink text-white border-ink' : 'bg-white text-ink-soft border-ink-line hover:border-ink',
       )}
     >

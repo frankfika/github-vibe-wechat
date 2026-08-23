@@ -29,7 +29,9 @@ export function Tabs({
 
 export function TabsList({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn('flex flex-wrap gap-1 border-b border-ink-line', className)}>{children}</div>
+    <div className={cn('flex gap-1 overflow-x-auto border-b border-ink-line', className)}>
+      {children}
+    </div>
   );
 }
 
@@ -39,8 +41,11 @@ export function TabsTrigger({ value, children }: { value: string; children: Reac
   return (
     <button
       onClick={() => ctx.setValue(value)}
+      role="tab"
+      aria-selected={active}
       className={cn(
-        'h-8 px-3 text-sm border-b-2 -mb-px transition-colors',
+        'h-8 px-3 text-sm border-b-2 -mb-px whitespace-nowrap transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink',
         active
           ? 'border-ink text-ink font-medium'
           : 'border-transparent text-ink-muted hover:text-ink',

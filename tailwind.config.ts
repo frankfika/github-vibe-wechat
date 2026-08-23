@@ -12,7 +12,8 @@ const config: Config = {
         ink: {
           DEFAULT: '#1d1d1f',
           soft: '#29292c',
-          muted: '#86868b',
+          muted: '#6e6e73',
+          'muted-weak': '#86868b',
           line: '#d2d2d7',
           panel: '#f5f5f7',
         },

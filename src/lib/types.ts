@@ -22,7 +22,6 @@ export interface Brief {
   platforms: PlatformId[];
   bilingual: boolean;
   titleHint?: string;
-  imagePlan?: string;
   cta?: string;
 }
 

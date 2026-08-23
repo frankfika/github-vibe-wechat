@@ -32,3 +32,6 @@ next-env.d.ts
 .*.tmpdir/
 *.tmpdir/
 _tmp_*
+
+# browser test artifacts
+.playwright-mcp/
