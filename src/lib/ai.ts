@@ -7,19 +7,27 @@ import { PLATFORMS, PLATFORM_ORDER } from './platforms';
 
 let client: Anthropic | null = null;
 
-export function getClient(): Anthropic {
-  if (client) return client;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+export interface AiLike {
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+
+// 优先级：请求传的 ai(用户在设置里填的密钥) > .env.local 环境变量。
+// 用了用户密钥时每次新建(不缓存)，否则复用 env 构建的缓存 client。
+export function getClient(ai?: AiLike): Anthropic {
+  const useEnv = !(ai?.apiKey?.trim());
+  const apiKey = ai?.apiKey?.trim() || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error(
-      '未配置 ANTHROPIC_API_KEY。请在 .env.local 设置（参考 .env.local.example）。',
+      '未配置 AI 密钥。请打开「设置 → AI 模型」填写你的密钥（或设置 .env.local 的 ANTHROPIC_API_KEY 作兜底）。',
     );
   }
-  client = new Anthropic({
-    apiKey,
-    baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.minimaxi.com/anthropic',
-  });
-  return client;
+  const baseURL = ai?.baseUrl?.trim() || process.env.ANTHROPIC_BASE_URL || 'https://api.minimaxi.com/anthropic';
+  if (useEnv && client) return client;
+  const c = new Anthropic({ apiKey, baseURL });
+  if (useEnv) client = c;
+  return c;
 }
 
 export const MODEL = process.env.ANTHROPIC_MODEL || 'MiniMax-M3';
@@ -44,13 +52,14 @@ export async function generateMaster(
   brief: Brief,
   material: string,
   directive?: string,
+  ai?: AiLike,
 ): Promise<string> {
   const user = buildUserPrompt(brief, material);
   const system = directive
     ? `${MASTER_SYSTEM}\n\n## 本 Agent 写作指令\n${directive}`
     : MASTER_SYSTEM;
-  const msg = await getClient().messages.create({
-    model: MODEL,
+  const msg = await getClient(ai).messages.create({
+    model: ai?.model?.trim() || MODEL,
     max_tokens: brief.length === 'short' ? 1500 : brief.length === 'long' ? 4500 : 3000,
     system,
     messages: [{ role: 'user', content: user }],
@@ -85,11 +94,12 @@ export async function adaptPlatform(
   brief: Brief,
   master: string,
   platform: PlatformId,
+  ai?: AiLike,
 ): Promise<string> {
   const spec = PLATFORMS[platform];
   const user = `## 母稿（公众号）\n\n${master}\n\n## 目标平台：${spec.label}（${spec.name}）\n\n平台约束：\n${spec.rules}\n\n形态：${spec.shape}\n钩子：${spec.hook}\n事实深度：${spec.depth}\n${spec.maxChars ? `字数上限：${spec.maxChars}\n` : ''}复制模式：${spec.copyMode}\n\n请按上述改写。`;
-  const msg = await getClient().messages.create({
-    model: MODEL,
+  const msg = await getClient(ai).messages.create({
+    model: ai?.model?.trim() || MODEL,
     max_tokens: 1800,
     system: ADAPT_SYSTEM,
     messages: [{ role: 'user', content: user }],

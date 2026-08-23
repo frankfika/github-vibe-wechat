@@ -24,19 +24,18 @@ OmniWriter 是一套**开放**的创作 Agent：给它素材和你的立场，�
 
 ## 快速开始
 
-> 💡 最省事：双击 **`dev.command`**(或终端运行 **`./dev.sh`**)——自动补依赖、建 `.env.local`、启动并打开浏览器。
+> 💡 最省事：双击 **`dev.command`**（或终端运行 **`./dev.sh`**）——自动补依赖、启动并打开浏览器。
 
-```bash
-pnpm install
-cp .env.local.example .env.local
-# 在 .env.local 填入 ANTHROPIC_API_KEY（默认 MiniMax 的 key）
-pnpm dev
-# 打开 http://localhost:3000
-```
+1. 打开 `http://localhost:3000` → 右上角「设置」→「**AI 模型**」，粘贴你的 **API Key**（默认接 MiniMax 接口，Base URL / 模型可按需改）。密钥只存在你的浏览器本地，改完即生效，无需重启。
+2. 回首页**选一个 Agent** → 贴素材 → 标发布地点 → 点「生成母稿」。
 
-未配 key 也能用：编辑器、预览、平台稿、ZIP 导出都正常，只是 AI 生成不可用（AI 状态会在界面提示）。
+> 也可以用 `.env.local` 的 `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` 作为**服务端兜底**（老方式，`pnpm dev` 即可）。
+
+未配 key 也能用：编辑器、预览、平台稿、ZIP 导出都正常，只是 AI 生成不可用（界面会引导你在设置里填密钥）。
 
 ## 环境变量
+
+> 可选的服务端兜底：日常使用在「设置 → AI 模型」填你的密钥即可，无需配置这里。
 
 ```bash
 ANTHROPIC_API_KEY=...                # 必需：AI 模型的 key

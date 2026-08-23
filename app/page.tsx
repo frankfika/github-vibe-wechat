@@ -56,7 +56,7 @@ export default function HomePage() {
           {aiReady === false && (
             <details className="mb-6 rounded-lg border border-amber-300 bg-amber-50/70">
               <summary className="px-3 py-2.5 cursor-pointer text-[13px] font-medium text-amber-900 select-none">
-                未配置 AI 密钥——点此查看 3 步配置（不配置也能用编辑器与「纯排版」Agent）
+                未配置 AI 密钥——打开「设置」填你的密钥即可使用（不配置也能用编辑器与「纯排版」Agent）
               </summary>
               <div className="px-3 pb-3">
                 <AiSetupGuide onRefresh={refresh} compact/>

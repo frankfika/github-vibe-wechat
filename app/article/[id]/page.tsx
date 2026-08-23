@@ -9,6 +9,7 @@ import { PreviewPane } from '@/components/PreviewPane';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { ValidationStrip } from '@/components/ValidationStrip';
 import { useArticleStore } from '@/src/lib/store';
+import { loadAiConfig } from '@/src/lib/ai-config';
 import type { Brief, PlatformId } from '@/src/lib/types';
 import { downloadBlob, markdownToInlineHtml } from '@/src/lib/export-html';
 
@@ -42,7 +43,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ brief: article.brief, material: article.brief.material }),
+        body: JSON.stringify({ brief: article.brief, material: article.brief.material, ai: loadAiConfig() }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -67,7 +68,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       const res = await fetch('/api/adapt', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ brief: article.brief, master: article.content, platform: p }),
+        body: JSON.stringify({ brief: article.brief, master: article.content, platform: p, ai: loadAiConfig() }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

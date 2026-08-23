@@ -6,21 +6,38 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { DEFAULT_CONFIG, loadConfig, saveConfig } from '@/src/lib/config';
+import { DEFAULT_AI_CONFIG, loadAiConfig, saveAiConfig, isAiConfigured } from '@/src/lib/ai-config';
+import type { AiConfig } from '@/src/lib/ai-config';
 import type { CreatorConfig, PlatformId, Voice } from '@/src/lib/types';
 import { PLATFORM_ORDER, PLATFORMS } from '@/src/lib/platforms';
 
 export default function SettingsPage() {
   const [cfg, setCfg] = React.useState<CreatorConfig>(DEFAULT_CONFIG);
+  const [ai, setAi] = React.useState<AiConfig>(DEFAULT_AI_CONFIG);
   const [saved, setSaved] = React.useState(false);
 
-  React.useEffect(() => { setCfg(loadConfig()); }, []);
+  React.useEffect(() => {
+    setCfg(loadConfig());
+    setAi(loadAiConfig());
+  }, []);
+
+  const flash = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1200);
+  };
 
   const update = (patch: Partial<CreatorConfig>) => {
     const next = { ...cfg, ...patch };
     setCfg(next);
     saveConfig(next);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1200);
+    flash();
+  };
+
+  const updateAi = (patch: Partial<AiConfig>) => {
+    const next = { ...ai, ...patch };
+    setAi(next);
+    saveAiConfig(next);
+    flash();
   };
 
   const togglePlatform = (p: PlatformId) => {
@@ -35,6 +52,34 @@ export default function SettingsPage() {
         <div className="max-w-2xl mx-auto px-8 py-12">
           <h1 className="text-2xl font-bold tracking-tightish mb-1">设置</h1>
           <p className="text-sm text-ink-muted mb-8">这些默认会应用到所有新文章。改完自动保存到浏览器本地。</p>
+
+          <Section title="AI 模型">
+            {isAiConfigured(ai) ? (
+              <p className="text-[12.5px] text-emerald-700 inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"/> AI 密钥已配置，可直接生成
+              </p>
+            ) : (
+              <p className="text-[12.5px] text-amber-700">尚未配置 AI 密钥，生成不可用；编辑器 / 预览 / 平台稿 / 导出不受影响。</p>
+            )}
+            <Field label="API Key">
+              <Input
+                type="password"
+                value={ai.apiKey}
+                onChange={(e) => updateAi({ apiKey: e.target.value })}
+                placeholder="sk-… 粘贴你的模型密钥"
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="Base URL（可选，默认 MiniMax）">
+              <Input value={ai.baseUrl} onChange={(e) => updateAi({ baseUrl: e.target.value })} placeholder="https://api.minimaxi.com/anthropic" autoComplete="off"/>
+            </Field>
+            <Field label="模型（可选，默认 MiniMax-M3）">
+              <Input value={ai.model} onChange={(e) => updateAi({ model: e.target.value })} placeholder="MiniMax-M3" autoComplete="off"/>
+            </Field>
+            <p className="text-[11px] text-ink-muted -mt-1">
+              密钥只保存在你的浏览器本地，仅在生成 / 适配请求时发送到服务端调用模型，不写入任何作品。改完即生效，无需重启。
+            </p>
+          </Section>
 
           <Section title="默认平台">
             <div className="flex flex-wrap gap-1.5">
@@ -97,8 +142,8 @@ export default function SettingsPage() {
           </Section>
 
           <div className="mt-8 text-xs text-ink-muted">
-            AI 模型在 .env.local 里配（ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL / ANTHROPIC_MODEL）。改完重启 dev server 生效。
-            {saved && <span className="ml-2 text-ink">已保存</span>}
+            {saved && <span className="mr-2 text-ink">已保存</span>}
+            所有设置自动保存到此浏览器；AI 密钥仅在生成 / 适配请求时发送到服务端调用模型。
           </div>
         </div>
       </div>

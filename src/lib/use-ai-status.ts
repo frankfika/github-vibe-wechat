@@ -1,21 +1,17 @@
 'use client';
 
 import * as React from 'react';
+import { loadAiConfig, isAiConfigured } from './ai-config';
 
-// 统一探测 AI 是否已配置（首页、AgentCompose、BriefPanel 共用）
+// 判断「AI 是否可用」：读用户自己在设置页填的密钥(存浏览器本地)，
+// 以及服务端是否有 .env.local 兜底。无需请求 /api/ai-status。
 export function useAiStatus() {
   const [aiReady, setAiReady] = React.useState<boolean | null>(null);
 
   const refresh = React.useCallback(async (): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/ai-status');
-      const d = (await res.json()) as { configured: boolean };
-      setAiReady(d.configured);
-      return d.configured;
-    } catch {
-      setAiReady(false);
-      return false;
-    }
+    const ok = isAiConfigured(loadAiConfig());
+    setAiReady(ok);
+    return ok;
   }, []);
 
   React.useEffect(() => {

@@ -73,7 +73,7 @@ export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
       <div>
         <h2 className="text-base font-semibold tracking-tightish">创作指令</h2>
         <p className="text-xs text-ink-muted mt-1">
-          {aiReady === null ? '检测 AI 配置…' : aiReady ? 'AI 已配置。给素材 + 你的判断，剩下交给模型。' : 'AI 未在服务端配置（.env.local 的 ANTHROPIC_API_KEY）。仍可手写或只排版。'}
+          {aiReady === null ? '检测 AI 配置…' : aiReady ? 'AI 已配置。给素材 + 你的判断，剩下交给模型。' : '尚未配置 AI 密钥：打开「设置 → AI 模型」粘贴你的密钥。编辑器 / 预览 / 导出现在就能用。'}
         </p>
       </div>
 
