@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMaterial } from '@/src/lib/ai';
+import { fetchMaterial } from '@/src/lib/fetch';
 
 export const runtime = 'nodejs';
 

@@ -114,26 +114,3 @@ function extractText(msg: { content: Array<{ type: string; text?: string }> }): 
     .map((b) => (b.type === 'text' ? b.text ?? '' : ''))
     .join('');
 }
-
-// 抓取新闻链接 / URL 摘要（极简：交给模型；若失败返回 null）
-export async function fetchMaterial(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Pencil)' },
-      signal: AbortSignal.timeout(Number(process.env.FETCH_TIMEOUT_MS) || 15000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    // 极简提取：去标签，截断
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 6000);
-    return text;
-  } catch {
-    return null;
-  }
-}
