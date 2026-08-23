@@ -40,12 +40,19 @@ ${STYLE_GUIDE}
 - 图按阅读顺序用 Markdown 图片语法占位：![图 01｜描述。图片来源：…](images/01_xxx.jpg)
 - 文末附"## 来源链接"列表（新闻类）。`;
 
-export async function generateMaster(brief: Brief, material: string): Promise<string> {
+export async function generateMaster(
+  brief: Brief,
+  material: string,
+  directive?: string,
+): Promise<string> {
   const user = buildUserPrompt(brief, material);
+  const system = directive
+    ? `${MASTER_SYSTEM}\n\n## 本 Agent 写作指令\n${directive}`
+    : MASTER_SYSTEM;
   const msg = await getClient().messages.create({
     model: MODEL,
     max_tokens: brief.length === 'short' ? 1500 : brief.length === 'long' ? 4500 : 3000,
-    system: MASTER_SYSTEM,
+    system,
     messages: [{ role: 'user', content: user }],
   });
   return extractText(msg);

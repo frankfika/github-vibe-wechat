@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { AppShell } from '@/components/AppShell';
 import { BriefPanel } from '@/components/BriefPanel';
+import { AgentCompose } from '@/components/AgentCompose';
 import { Editor } from '@/components/Editor';
 import { PreviewPane } from '@/components/PreviewPane';
 import { PlatformTabs } from '@/components/PlatformTabs';
@@ -99,7 +100,11 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   return (
     <AppShell>
       <div className="h-full grid grid-cols-[320px_1fr_420px]">
-        <BriefPanel brief={article.brief} onChange={onBrief} onGenerate={onGenerate} generating={generating} />
+        {article.brief.agentId ? (
+          <AgentCompose brief={article.brief} onChange={onBrief} onGenerate={onGenerate} generating={generating} />
+        ) : (
+          <BriefPanel brief={article.brief} onChange={onBrief} onGenerate={onGenerate} generating={generating} />
+        )}
 
         <div className="flex flex-col border-x border-ink-line bg-white min-w-0">
           <div className="px-6 pt-4">

@@ -7,22 +7,6 @@ import { FileText, Settings, Plus, Trash2 } from 'lucide-react';
 import { useArticleStore } from '@/src/lib/store';
 import { Button } from './ui/button';
 import { cn } from './ui/cn';
-import type { Brief } from '@/src/lib/types';
-import { DEFAULT_CONFIG, loadConfig } from '@/src/lib/config';
-
-function makeBrief(): Brief {
-  const cfg = loadConfig();
-  return {
-    material: '',
-    materialType: 'topic',
-    angle: '',
-    voice: cfg.voice,
-    length: 'medium',
-    platforms: cfg.defaultPlatforms,
-    bilingual: cfg.bilingual,
-    cta: '',
-  };
-}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -30,15 +14,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hydrate = useArticleStore((s) => s.hydrate);
   const hydrated = useArticleStore((s) => s.hydrated);
   const articles = useArticleStore((s) => s.articles);
-  const create = useArticleStore((s) => s.create);
   const remove = useArticleStore((s) => s.remove);
 
   React.useEffect(() => { hydrate(); }, [hydrate]);
-
-  const onNew = () => {
-    const a = create(makeBrief());
-    router.push(`/article/${a.id}`);
-  };
 
   return (
     <div className="h-screen w-screen grid grid-cols-[260px_1fr] overflow-hidden">
@@ -48,11 +26,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="ml-2 text-[11px] text-ink-muted">写作 × 多平台</span>
         </div>
         <div className="p-2">
-          <Button onClick={onNew} size="md" className="w-full"><Plus size={14} className="mr-1.5"/> 新建文章</Button>
+          <Button onClick={() => router.push('/')} size="md" className="w-full"><Plus size={14} className="mr-1.5"/> 选 Agent</Button>
         </div>
         <nav className="flex-1 overflow-y-auto px-1.5 pb-2">
           {hydrated && articles.length === 0 && (
-            <div className="px-3 py-6 text-xs text-ink-muted">还没有文章。点"新建文章"开始。</div>
+            <div className="px-3 py-6 text-xs text-ink-muted">还没有文章。点「选 Agent」开始。</div>
           )}
           <ul className="flex flex-col gap-0.5">
             {articles.map((a) => {

@@ -6,6 +6,8 @@ import { Button } from './ui/button';
 import { Input, Textarea } from './ui/input';
 import { Select } from './ui/select';
 import { cn } from './ui/cn';
+import { AiSetupGuide } from './AiSetupGuide';
+import { useAiStatus } from '@/src/lib/use-ai-status';
 import type { Brief, MaterialType, PlatformId, Voice } from '@/src/lib/types';
 import { PLATFORM_ORDER, PLATFORMS } from '@/src/lib/platforms';
 
@@ -25,16 +27,9 @@ const MATERIAL_OPTIONS: { value: MaterialType; label: string }[] = [
 ];
 
 export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
+  const { aiReady, refresh } = useAiStatus();
+  const [showGuide, setShowGuide] = React.useState(false);
   const [fetching, setFetching] = React.useState(false);
-  const [aiReady, setAiReady] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
-    let alive = true;
-    fetch('/api/ai-status')
-      .then((r) => r.json())
-      .then((d: { configured: boolean }) => alive && setAiReady(d.configured))
-      .catch(() => alive && setAiReady(false));
-    return () => { alive = false; };
-  }, []);
 
   const update = (patch: Partial<Brief>) => onChange({ ...brief, ...patch });
 
@@ -63,6 +58,14 @@ export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
     } finally {
       setFetching(false);
     }
+  };
+
+  const handleGenerate = () => {
+    if (aiReady === false) {
+      setShowGuide(true);
+      return;
+    }
+    void onGenerate();
   };
 
   return (
@@ -173,12 +176,14 @@ export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
       </label>
 
       <div className="pt-2 mt-auto">
-        <Button onClick={onGenerate} disabled={generating || aiReady === false} size="lg" className="w-full">
+        <Button onClick={handleGenerate} disabled={generating} size="lg" className="w-full">
           {generating ? <Loader2 size={16} className="animate-spin mr-1.5"/> : <Sparkles size={16} className="mr-1.5"/>}
           {generating ? '生成中…' : '生成母稿'}
         </Button>
-        {aiReady === false && (
-          <p className="text-xs text-ink-muted mt-2">在 .env.local 设置 ANTHROPIC_API_KEY 后重启 dev server 启用 AI 生成。</p>
+        {showGuide && (
+          <div className="mt-2">
+            <AiSetupGuide onRefresh={refresh}/>
+          </div>
         )}
       </div>
     </div>
