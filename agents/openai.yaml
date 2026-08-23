@@ -1,4 +1,4 @@
 interface:
-  display_name: "GitHub Vibe WeChat"
-  short_description: "将 GitHub Vibe Coding 项目写成公众号文章"
-  default_prompt: "Use $github-vibe-wechat to turn my GitHub Vibe Coding project into a publishable WeChat article."
+  display_name: "AI 原生创作者平台"
+  short_description: "素材 + 指令 → 多平台发布包（公众号/X/知乎/小红书/B站/CSDN 等）"
+  default_prompt: "Use $creator-platform to turn my material (news / project / topic) plus my creation instructions into a multi-platform publishable content kit: WeChat master article, per-platform adaptations, and one-click publishing pages."

@@ -1,0 +1,15 @@
+# 本地生成产物不入库
+articles/*
+!articles/.gitkeep
+
+# 写工具原子写入的暂存目录（可安全删除，勿入库）
+.*.tmpdir/
+*.tmpdir/
+
+# Python
+__pycache__/
+*.pyc
+
+# 临时
+.DS_Store
+*.tmp
