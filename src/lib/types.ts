@@ -1,5 +1,7 @@
 export type Voice = 'relaxed' | 'editorial' | 'technical' | 'market';
 
+export type MaterialType = 'news' | 'project-own' | 'project-third' | 'topic' | 'copy';
+
 export type PlatformId =
   | 'wechat'
   | 'x'
@@ -13,7 +15,7 @@ export type PlatformId =
 
 export interface Brief {
   material: string;          // URL / 文本 / 主题
-  materialType: 'news' | 'project-own' | 'project-third' | 'topic' | 'copy';
+  materialType: MaterialType;
   angle: string;             // 角度 / 立场
   voice: Voice;
   length: 'short' | 'medium' | 'long';

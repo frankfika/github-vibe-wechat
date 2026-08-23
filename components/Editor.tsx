@@ -123,7 +123,7 @@ export function Editor({
   );
 }
 
-function ToolbarBtn({ on, onClick, children, ...rest }: { on: boolean; onClick: () => void; children: React.ReactNode; [k: string]: unknown }) {
+function ToolbarBtn({ on, onClick, children, ...rest }: { on?: boolean; onClick: () => void; children: React.ReactNode; [k: string]: unknown }) {
   return (
     <button
       onClick={onClick}
