@@ -46,9 +46,12 @@ export interface ValidationIssue {
 
 export function validateMarkdown(md: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const h1 = md.match(/^# .+$/gm);
-  if (!h1 || h1.length === 0) issues.push({ severity: 'high', message: '缺少 h1 标题' });
-  if (h1 && h1.length > 1) issues.push({ severity: 'high', message: `有 ${h1.length} 个 h1，应仅保留一个` });
+  // 支持 Markdown (#) 和已渲染的 HTML (<h1>) 两种输入
+  const mdH1 = md.match(/^# .+$/gm) ?? [];
+  const htmlH1 = md.match(/<h1[\s>][^<]*<\/h1>/gi) ?? [];
+  const h1Count = mdH1.length + htmlH1.length;
+  if (h1Count === 0) issues.push({ severity: 'high', message: '缺少 h1 标题' });
+  if (h1Count > 1) issues.push({ severity: 'high', message: `有 ${h1Count} 个 h1，应仅保留一个` });
 
   const imgs = [...md.matchAll(/!\[.*?\]\((.*?)\)/g)].map((m) => m[1]);
   imgs.forEach((src, i) => {

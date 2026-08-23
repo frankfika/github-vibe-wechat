@@ -8,7 +8,6 @@ import { Select } from './ui/select';
 import { cn } from './ui/cn';
 import type { Brief, MaterialType, PlatformId, Voice } from '@/src/lib/types';
 import { PLATFORM_ORDER, PLATFORMS } from '@/src/lib/platforms';
-import { fetchMaterial } from '@/src/lib/fetch';
 
 interface Props {
   brief: Brief;
@@ -50,8 +49,17 @@ export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
     if (!/^https?:\/\//i.test(brief.material)) return;
     setFetching(true);
     try {
-      const txt = await fetchMaterial(brief.material);
-      if (txt) update({ material: `${brief.material}\n\n---\n${txt}` });
+      // 走服务端路由避开 CORS
+      const res = await fetch('/api/fetch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: brief.material }),
+      });
+      if (!res.ok) throw new Error(`抓取失败 (HTTP ${res.status})`);
+      const { text } = (await res.json()) as { text: string | null };
+      if (text) update({ material: `${brief.material}\n\n---\n${text}` });
+    } catch (e) {
+      alert((e as Error).message || '抓取失败');
     } finally {
       setFetching(false);
     }

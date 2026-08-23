@@ -9,7 +9,7 @@ import { PlatformTabs } from '@/components/PlatformTabs';
 import { ValidationStrip } from '@/components/ValidationStrip';
 import { useArticleStore } from '@/src/lib/store';
 import type { Brief, PlatformId } from '@/src/lib/types';
-import { downloadBlob } from '@/src/lib/export-html';
+import { downloadBlob, markdownToInlineHtml } from '@/src/lib/export-html';
 
 export default function ArticlePage({ params }: { params: { id: string } }) {
   const hydrate = useArticleStore((s) => s.hydrate);
@@ -48,7 +48,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const { md, title } = (await res.json()) as { md: string; title?: string };
-      setContent(article.id, md);
+      // AI 返回的是 Markdown；转成 HTML（带 inline 样式）后再写入编辑器。
+      // markdownToInlineHtml 对已是 HTML 的内容是幂等的（regex 不匹配，标签原样保留）。
+      setContent(article.id, markdownToInlineHtml(md));
       if (title) onTitle(title);
     } catch (e) {
       alert((e as Error).message || '生成失败');
