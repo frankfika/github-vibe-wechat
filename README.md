@@ -1,86 +1,92 @@
-# AI-Native Creator Platform（AI 原生创作者平台）
+# Pencil · 中文写作与多平台排版
 
-把任意素材（**指定新闻链接 / GitHub 项目 / 观点话题 / 已有文案**）按你的创作指令，自动编排成一套**多平台可发布内容包**的 skill 套件：公众号母稿 + X/Twitter、Reddit、Hacker News、知乎、CSDN、Product Hunt、B站、小红书 的适配稿与一键复制发布页。
+pen.dev 风格的写作工作台，专为公众号、X、知乎、小红书、B站、CSDN、Reddit、Hacker News、Product Hunt 设计。给素材 + 你的判断，AI 写母稿，逐平台适配，一键复制 / 下载 HTML+ZIP 离线发布。
 
-> 由 `github-vibe-wechat` 泛化而来：不再只服务 GitHub 项目，而是覆盖你公众号的**全部内容渠道**——新闻链接渠道、自有项目渠道、推荐项目渠道、观点随笔渠道。
+> 这是一个**独立 Web App**，不是 skill 包。所有编辑/平台/事实核查规则都收编进 App 的内置模块（`src/lib/editorial.ts`、`src/lib/platforms.ts`）。
 
-## 结构
+## 功能
 
-```text
-github-vibe-wechat/                 # 平台根目录（= 入口 skill：creator-platform）
-├── SKILL.md                        # 入口路由：素材类型 → 子 skill
-├── agents/openai.yaml              # 入口 UI 元数据
-├── README.md                       # 本文件
-├── config/
-│   └── creator.yaml                # ★ 用户自配置中心（默认平台、双语、系列名、作者签名、存档、引擎路径）
-├── references/                     # 平台共享参考
-│   ├── workflow.md                 # 端到端流程
-│   ├── editorial-guide.md          # 编辑准则（去 AI 味、论点主线、图证）
-│   ├── platforms.md                # 各平台适配规则与校验清单
-│   └── brief.md                    # 创作指令卡模板
-├── skills/                         # ★ 模块化子 skills（各自可独立配置、独立安装）
-│   ├── news-to-content/            # 【新闻链接渠道】指定新闻/事件 + 指令 → 多平台内容
-│   ├── topic-essay/                # 【观点随笔渠道】主题 + 指令 → 观点长文
-│   ├── project-launch/             # 【自有项目渠道】你的 GitHub/Vibe Coding 项目 → 中英双语全平台发布
-│   ├── project-recommend/          # 【推荐项目渠道】别人的开源项目 → 中立推荐包
-│   └── content-engine/             # 渲染引擎封装（调用 wechat-silicon-editor 构建脚本）
-├── scripts/
-│   └── install.sh                  # 幂等安装/升级/卸载 skills
-└── articles/                       # 文章存档（按 slug 归档）
-```
+- **创作指令面板**：素材类型 / 素材 / 角度 / 语气 / 长度 / 标题 / 平台 / CTA / 双语 → 一键生成母稿
+- **Tiptap 编辑器**：中文友好的极简工具栏；支持标题、加粗、列表、引用、图片、行内代码；自动保存到浏览器
+- **公众号实时预览**：石墨风（纯白 / 近黑 / 软灰 / 无装饰），行内样式（公众号会剥离 `<style>`），移动端/桌面切换
+- **一键复制公众号正文**：ClipboardItem 写入富文本（HTML + 纯文本双格式），file:// 下 `execCommand` fallback
+- **多平台适配**：九平台逐个改写，钩子/长度/证据/CTA 各自重写（X ≤240 字、HN Show HN、PH Maker Comment 等规则内嵌）
+- **ZIP 导出**：包含公众号 HTML、母稿 md、图片目录
+- **设置**：默认平台、双语、语气、公众号系列/Eyebrow/署名、新闻 Eyebrow
+- **文章存档**：localStorage 持久化（本地优先）
 
-## 安装
+## 技术栈
+
+- **Next.js 14**（App Router）+ **TypeScript** + **Tailwind CSS**
+- **Tiptap 2**（编辑器）
+- **Zustand**（状态 + localStorage）
+- **@anthropic-ai/sdk**（AI；默认走 pen.dev 同款的 `https://api.minimaxi.com/anthropic`，模型 `MiniMax-M3`）
+- **JSZip**（打包）
+- **lucide-react**（图标）
+
+## 快速开始
 
 ```bash
-# 1. 克隆（若尚未克隆）
-git clone https://github.com/frankfika/github-vibe-wechat.git
-cd github-vibe-wechat
-
-# 2. 安装 skills（默认同时装到 ~/.agents/skills 与 ~/.codex/skills）
-./scripts/install.sh
-
-# 3. 按需：安装渲染引擎（公众号+全平台排版引擎，来自 frankfika/wechat-silicon-editor）
-./scripts/install.sh --engine
+pnpm install
+cp .env.local.example .env.local
+# 在 .env.local 填入 ANTHROPIC_API_KEY（MiniMax 的 key）
+pnpm dev
+# 打开 http://localhost:3000
 ```
 
-安装后，在 DSH / Codex / Claude 会话里即可自动发现以下 skills：
+## 环境变量
 
-| skill | 触发场景 |
-|---|---|
-| `creator-platform` | 入口路由：给素材+指令，自动分诊 |
-| `news-to-content` | 新闻链接 / 事件 / 资讯 → 按你的指令写多平台文章 |
-| `topic-essay` | 观点、话题、随笔 |
-| `project-launch` | 你自己的 GitHub 项目发布 |
-| `project-recommend` | 推荐别人的开源项目 |
-| `content-engine` | 排版已有文案 / 调用渲染引擎 |
+```bash
+ANTHROPIC_API_KEY=...                # 必需：AI 模型的 key
+ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic   # 默认：pen.dev 同款
+ANTHROPIC_MODEL=MiniMax-M3           # 默认
+FETCH_TIMEOUT_MS=15000               # 抓取新闻链接的超时
+```
 
-## 配置
+未配 `ANTHROPIC_API_KEY` 也能用：编辑器、预览、平台稿、ZIP 导出都正常，只是 AI 生成不可用。
 
-只改一个文件即可定制平台默认行为：`config/creator.yaml`（安装后位于 `~/.agents/skills/creator-platform/config/creator.yaml`，改这份生效；仓库内的是默认模板）。可配置项：
+## 使用流程
 
-- `default_platforms`：默认产出哪些平台
-- `bilingual`：是否默认中英双语
-- `series_title` / `author_signature`：系列标题前缀、文末签名
-- `archive_root`：文章存档目录
-- `engine_root`：渲染引擎路径（默认 `~/.codex/skills/wechat-silicon-editor`）
-- `voice`：默认文风口径（relaxed / editorial / technical…）
+1. 首页点"从一条新闻开始"或"写一篇观点" → 自动建文章并跳到工作台
+2. 左栏填创作指令（素材 + 角度 + 语气 + 长度 + 平台 + CTA）→ 点"生成母稿"
+3. 中栏 Tiptap 编辑器微调文稿
+4. 右栏上半：公众号实时预览 + 复制按钮
+5. 右栏下半：切换平台 Tab → 点"适配此平台" → 微调 → 复制
+6. 底部"下载 ZIP" 拿到 `article.html`（带复制按钮）+ `article.md` + `images/`
 
-## 使用示例
+## 目录
 
-> 「按这条新闻写一篇公众号文章 + 小红书：https://xxx/yyy —— 角度是'英伟达为什么加注 SSI'，语气 relaxed，标题不要'重磅'，配图用新闻原文截图」
+```text
+.
+├── app/                  Next.js App Router
+│   ├── page.tsx          首页（文章列表 + 新建）
+│   ├── article/[id]/     编辑工作台
+│   ├── settings/         设置
+│   └── api/              generate / adapt / fetch / export
+├── components/           UI 组件（AppShell / Editor / BriefPanel / PreviewPane / PlatformTabs / ui/*）
+├── src/lib/              内置内容模块
+│   ├── types.ts          类型
+│   ├── config.ts         默认配置（用户配置在浏览器 localStorage）
+│   ├── store.ts          Zustand store
+│   ├── ai.ts             MiniMax-M3 客户端 + 提示词
+│   ├── editorial.ts      编辑准则 + 事实核查 + 石墨风 CSS + 校验
+│   ├── platforms.ts      九平台规范
+│   └── export.ts         HTML 构建 / 富文本复制 / ZIP
+├── tailwind.config.ts    设计令牌（石墨色 + 中文字体栈）
+└── .env.local.example    环境变量模板
+```
 
-> 「把 InstantFlow 做成全平台发布包，中英双语」
+## 设计原则（应用自身也遵守 pen.dev 的 better-typography / better-writing）
 
-> 「帮我写一篇观点文：AI 时代的文章编辑应该长什么样」
+- 16px 起、1.7 行高、移动端输入框 16px 防止 iOS 缩放
+- 中文优先字体栈：`-apple-system / PingFang SC / Hiragino Sans GB / Microsoft YaHei`
+- 文末主张句而非空泛总结；按钮动词开头；空白状态指明下一步
+- 无蓝色强调、无渐变、无玻璃感、无大圆角装饰
 
-每个子 skill 都支持"素材 + 创作指令"驱动；指令缺项时按各自口径补齐，关键分歧会先问你。
+## 路线图
 
-## 依赖
-
-- 渲染引擎：`frankfika/wechat-silicon-editor`（`install.sh --engine` 自动克隆；构建脚本需要 `python3 + beautifulsoup4`，Markdown 输入需要 `pandoc`）
-- 无需其他运行时。
-
-## 路线图（可选演进）
-
-- Web 版创作台：同一套 skills 之上包一层 GUI（素材输入 → 指令卡 → 实时预览 → 一键复制）。
-- 更多渠道 skill：短剧脚本、播客文案、视频口播稿等。
+- [ ] 图片上传/拖拽 → 自动嵌入 + 图注
+- [ ] 文章导出为 GitHub repo（gh CLI 或 API）
+- [ ] 同步设置到云端（账号）
+- [ ] AI 改稿（"这段太 AI"→ 局部重写）
+- [ ] 实时协作

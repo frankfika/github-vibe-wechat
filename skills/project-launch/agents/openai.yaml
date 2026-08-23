@@ -1,4 +1,0 @@
-interface:
-  display_name: "自有项目全渠道发布"
-  short_description: "把我的 GitHub/Vibe Coding 项目做成中英双语全平台发布包"
-  default_prompt: "Use $project-launch to re-read my current GitHub/Vibe Coding repository and create bilingual, image-led, one-click publishing kits for WeChat, X/Twitter post and article, Reddit, Hacker News, Zhihu, CSDN, Product Hunt, B站 and 小红书."

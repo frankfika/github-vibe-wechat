@@ -1,15 +1,34 @@
-# 本地生成产物不入库
-articles/*
-!articles/.gitkeep
+# dependencies
+node_modules/
+.pnp
+.pnp.js
 
-# 写工具原子写入的暂存目录（可安全删除，勿入库）
+# next
+.next/
+out/
+build/
+dist/
+
+# env
+.env
+.env.local
+.env*.local
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# editor / OS
+.DS_Store
+*.swp
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# write-tool atomic staging
 .*.tmpdir/
 *.tmpdir/
-
-# Python
-__pycache__/
-*.pyc
-
-# 临时
-.DS_Store
-*.tmp
+_tmp_*

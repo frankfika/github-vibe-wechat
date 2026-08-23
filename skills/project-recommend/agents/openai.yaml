@@ -1,4 +1,0 @@
-interface:
-  display_name: "开源项目推荐发布"
-  short_description: "把别人的开源项目写成中立、有来源的多平台推荐包"
-  default_prompt: "Use $project-recommend to turn this third-party GitHub/open-source repository into a source-backed, neutral multi-platform recommendation: WeChat article plus per-platform publishing pages, keeping the ownership boundary intact."

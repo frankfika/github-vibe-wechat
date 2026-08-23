@@ -1,4 +1,0 @@
-interface:
-  display_name: "观点随笔 → 多平台文章"
-  short_description: "给主题和判断，写一篇有个人立场的观点长文并适配全平台"
-  default_prompt: "Use $topic-essay to turn my topic and judgment into a personal essay: WeChat master article plus per-platform adaptations, in my voice, following my instructions."

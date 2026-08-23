@@ -1,0 +1,37 @@
+{
+  "name": "creator-platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "14.2.15",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@tiptap/react": "2.6.6",
+    "@tiptap/starter-kit": "2.6.6",
+    "@tiptap/extension-image": "2.6.6",
+    "@tiptap/extension-placeholder": "2.6.6",
+    "@tiptap/pm": "2.6.6",
+    "zustand": "4.5.5",
+    "@anthropic-ai/sdk": "0.32.1",
+    "jszip": "3.10.1",
+    "lucide-react": "0.453.0",
+    "clsx": "2.1.1",
+    "tailwind-merge": "2.5.4",
+    "class-variance-authority": "0.7.0"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3",
+    "@types/node": "22.7.5",
+    "@types/react": "18.3.11",
+    "@types/react-dom": "18.3.0",
+    "tailwindcss": "3.4.13",
+    "postcss": "8.4.47",
+    "autoprefixer": "10.4.20"
+  }
+}

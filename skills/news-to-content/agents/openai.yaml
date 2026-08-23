@@ -1,4 +1,0 @@
-interface:
-  display_name: "新闻链接 → 多平台文章"
-  short_description: "按你的角度，把一条新闻链接改写成公众号+全平台文章包"
-  default_prompt: "Use $news-to-content to turn this news link/material into a multi-platform content kit: verify facts first, then write the WeChat master article and per-platform adaptations following my angle and instructions."
