@@ -1,5 +1,4 @@
-// AI 客户端 + 提示词（MiniMax-M3，Anthropic 兼容）
-// 与 pen.dev 同款（~/.pencil/models.json: api.minimaxi.com/anthropic）。
+// AI 客户端 + 提示词（默认 MiniMax-M3，Anthropic 兼容接口，可在 .env.local 换模型）
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { Brief, PlatformId } from './types';

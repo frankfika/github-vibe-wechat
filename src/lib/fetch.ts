@@ -4,7 +4,7 @@
 export async function fetchMaterial(url: string, timeoutMs = 15000): Promise<string | null> {
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Pencil)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (OmniWriter)' },
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return null;

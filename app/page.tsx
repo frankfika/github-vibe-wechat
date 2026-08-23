@@ -39,11 +39,10 @@ export default function HomePage() {
     <AppShell>
       <div className="h-full overflow-y-auto">
         <div className="max-w-3xl mx-auto px-8 py-12">
-          <div className="text-[11px] uppercase tracking-[1.5px] text-ink-muted mb-3">Pencil · 中文写作 × 多平台排版</div>
+          <div className="text-[11px] uppercase tracking-[1.5px] text-ink-muted mb-3">OmniWriter · 中文写作 × 多平台排版</div>
           <h1 className="text-[34px] font-bold tracking-tightish leading-[1.15] mb-3">把任何素材，变成一套多平台可发布的内容包。</h1>
           <p className="text-ink-soft text-[15px] leading-relaxed mb-8">
-            pen.dev 风格的写作工作台，专为公众号、X、知乎、小红书、B站、CSDN、Reddit、Hacker News、Product Hunt 设计。
-            给素材 + 你的判断，AI 写母稿，逐平台适配，一键复制 / 下载 HTML+ZIP 离线发布。
+            OmniWriter 创作工作台，专为公众号、X、知乎、小红书、B站、CSDN、Reddit、Hacker News、Product Hunt 设计。给素材 + 你的判断，AI 写母稿，逐平台适配，一键复制 / 下载 HTML+ZIP 离线发布。
           </p>
           <div className="flex flex-wrap gap-2 mb-10">
             <Button size="lg" onClick={() => onNew({ materialType: 'news' })}>

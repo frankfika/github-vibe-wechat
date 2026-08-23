@@ -24,6 +24,8 @@ OmniWriter 是一套**开放**的创作 Agent：给它素材和你的立场，�
 
 ## 快速开始
 
+> 💡 最省事：双击 **`dev.command`**(或终端运行 **`./dev.sh`**)——自动补依赖、建 `.env.local`、启动并打开浏览器。
+
 ```bash
 pnpm install
 cp .env.local.example .env.local

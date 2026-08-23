@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="h-screen w-screen grid grid-cols-[260px_1fr] overflow-hidden">
       <aside className="border-r border-ink-line bg-ink-panel/30 flex flex-col">
         <div className="px-4 h-12 flex items-center border-b border-ink-line">
-          <Link href="/" className="font-semibold tracking-tightish">Pencil</Link>
+          <Link href="/" className="font-semibold tracking-tightish">OmniWriter</Link>
           <span className="ml-2 text-[11px] text-ink-muted">写作 × 多平台</span>
         </div>
         <div className="p-2">
