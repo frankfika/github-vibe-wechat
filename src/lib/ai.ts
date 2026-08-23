@@ -52,29 +52,6 @@ export async function generateMaster(brief: Brief, material: string): Promise<st
   return extractText(msg);
 }
 
-export async function generateMasterStream(
-  brief: Brief,
-  material: string,
-  onDelta: (chunk: string) => void,
-): Promise<string> {
-  const user = buildUserPrompt(brief, material);
-  let full = '';
-  const stream = getClient().messages.stream({
-    model: MODEL,
-    max_tokens: brief.length === 'short' ? 1500 : brief.length === 'long' ? 4500 : 3000,
-    system: MASTER_SYSTEM,
-    messages: [{ role: 'user', content: user }],
-  });
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      const chunk = event.delta.text;
-      full += chunk;
-      onDelta(chunk);
-    }
-  }
-  return full;
-}
-
 function buildUserPrompt(brief: Brief, material: string): string {
   const parts: string[] = [];
   parts.push('## 素材');

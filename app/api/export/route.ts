@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { buildWechatHtml, buildZip } from '@/src/lib/export';
+import { buildWechatHtml } from '@/src/lib/export-html';
+import { buildZip } from '@/src/lib/export-zip';
 
 export const runtime = 'nodejs';
 

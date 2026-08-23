@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Copy, Check, Smartphone, Monitor } from 'lucide-react';
 import { Button } from './ui/button';
-import { copyRichToClipboard, markdownToInlineHtml } from '@/src/lib/export';
+import { copyRichToClipboard, markdownToInlineHtml } from '@/src/lib/export-html';
 
 export function PreviewPane({ markdown }: { markdown: string }) {
   const [copied, setCopied] = React.useState(false);

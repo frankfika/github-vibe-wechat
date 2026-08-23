@@ -9,7 +9,7 @@ import { PlatformTabs } from '@/components/PlatformTabs';
 import { ValidationStrip } from '@/components/ValidationStrip';
 import { useArticleStore } from '@/src/lib/store';
 import type { Brief, PlatformId } from '@/src/lib/types';
-import { buildWechatHtml, buildZip, downloadBlob } from '@/src/lib/export';
+import { downloadBlob } from '@/src/lib/export-html';
 
 export default function ArticlePage({ params }: { params: { id: string } }) {
   const hydrate = useArticleStore((s) => s.hydrate);
@@ -80,9 +80,18 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   };
 
   const onExportZip = async () => {
-    const html = buildWechatHtml({ title: article.title, mdBody: article.content });
-    const zip = await buildZip({ title: article.title, mdBody: html, mdRaw: article.content, images: {} });
-    downloadBlob(zip, `${slug(article.title)}.zip`);
+    try {
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: article.title, md: article.content, format: 'zip' }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      downloadBlob(blob, `${slug(article.title)}.zip`);
+    } catch (e) {
+      alert((e as Error).message || '导出失败');
+    }
   };
 
   return (

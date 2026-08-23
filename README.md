@@ -8,21 +8,30 @@ pen.dev 风格的写作工作台，专为公众号、X、知乎、小红书、B�
 
 - **创作指令面板**：素材类型 / 素材 / 角度 / 语气 / 长度 / 标题 / 平台 / CTA / 双语 → 一键生成母稿
 - **Tiptap 编辑器**：中文友好的极简工具栏；支持标题、加粗、列表、引用、图片、行内代码；自动保存到浏览器
+  - **粘贴 / 拖拽图片** 自动插入并弹图注对话框（契合"图 N｜描述。图片来源：…"格式）
+  - **字符 / 词数** 实时显示在工具栏右下
+- **Markdown 校验条**：编辑区上方实时显示 h1 数量、图片编号、AI/营销标签词问题，按高/中/低分级
 - **公众号实时预览**：石墨风（纯白 / 近黑 / 软灰 / 无装饰），行内样式（公众号会剥离 `<style>`），移动端/桌面切换
 - **一键复制公众号正文**：ClipboardItem 写入富文本（HTML + 纯文本双格式），file:// 下 `execCommand` fallback
 - **多平台适配**：九平台逐个改写，钩子/长度/证据/CTA 各自重写（X ≤240 字、HN Show HN、PH Maker Comment 等规则内嵌）
-- **ZIP 导出**：包含公众号 HTML、母稿 md、图片目录
+- **ZIP 导出**（服务端构建）：包含公众号 HTML（带复制按钮）、母稿 md、图片目录
 - **设置**：默认平台、双语、语气、公众号系列/Eyebrow/署名、新闻 Eyebrow
 - **文章存档**：localStorage 持久化（本地优先）
 
 ## 技术栈
 
 - **Next.js 14**（App Router）+ **TypeScript** + **Tailwind CSS**
-- **Tiptap 2**（编辑器）
+- **Tiptap 2**（编辑器 + character-count + image + placeholder）
 - **Zustand**（状态 + localStorage）
-- **@anthropic-ai/sdk**（AI；默认走 pen.dev 同款的 `https://api.minimaxi.com/anthropic`，模型 `MiniMax-M3`）
-- **JSZip**（打包）
+- **@anthropic-ai/sdk**（AI；服务端调用，默认走 pen.dev 同款的 `https://api.minimaxi.com/anthropic`，模型 `MiniMax-M3`）
+- **JSZip**（仅服务端 ZIP 打包，不进客户端 bundle）
 - **lucide-react**（图标）
+
+代码组织：
+- `src/lib/export-html.ts` — 客户端安全的 HTML / 富文本复制（无 Node-only 依赖）
+- `src/lib/export-zip.ts` — 服务端 ZIP 打包（JSZip）
+- `src/lib/ai.ts` — 服务端 AI 客户端 + 提示词
+- `src/lib/fetch.ts` — 客户端安全的 URL 抓取
 
 ## 快速开始
 
@@ -49,8 +58,8 @@ FETCH_TIMEOUT_MS=15000               # 抓取新闻链接的超时
 
 1. 首页点"从一条新闻开始"或"写一篇观点" → 自动建文章并跳到工作台
 2. 左栏填创作指令（素材 + 角度 + 语气 + 长度 + 平台 + CTA）→ 点"生成母稿"
-3. 中栏 Tiptap 编辑器微调文稿
-4. 右栏上半：公众号实时预览 + 复制按钮
+3. 中栏 Tiptap 编辑器微调文稿；可粘贴 / 拖拽图片（自动弹图注）
+4. 右栏上半：公众号实时预览 + 复制按钮 + 校验条
 5. 右栏下半：切换平台 Tab → 点"适配此平台" → 微调 → 复制
 6. 底部"下载 ZIP" 拿到 `article.html`（带复制按钮）+ `article.md` + `images/`
 

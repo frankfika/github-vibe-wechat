@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { PLATFORMS } from '@/src/lib/platforms';
 import type { Article, PlatformId } from '@/src/lib/types';
-import { copyRichToClipboard } from '@/src/lib/export';
+import { copyRichToClipboard } from '@/src/lib/export-html';
 
 export function PlatformTabs({
   article,

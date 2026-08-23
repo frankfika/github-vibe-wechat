@@ -1,9 +1,6 @@
-// 导出：构建公众号石墨风 HTML、一键复制载荷（rich clipboard）、ZIP 打包。
-// 吸收原 wechat-silicon-editor/build_wechat_article.py 的核心规则（行内样式 + 复制按钮 + 嵌入图片）。
+// 客户端安全的导出工具（公众号 HTML 构建 + 富文本复制）。
+// 不依赖 Node-only 包（无 JSZip）。ZIP 打包走 src/lib/export-zip.ts（服务端）。
 
-import JSZip from 'jszip';
-
-// 公众号石墨风 CSS（行内；构建产物不依赖外部样式表，因为公众号会剥离 <style>）
 export const WECHAT_INLINE_CSS = `
 body{margin:0;padding:0;background:#fff;color:#1d1d1f;-webkit-font-smoothing:antialiased;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
 h1{font-size:22px;font-weight:700;line-height:1.32;color:#1d1d1f;margin:0 0 14px;letter-spacing:-0.011em;}
@@ -53,45 +50,31 @@ export interface BuildOptions {
   title: string;
   eyebrow?: string;
   author?: string;
-  mdBody: string;        // 母稿 Markdown
-  images?: Record<string, string>; // filename -> dataURL or http URL
+  mdBody: string;
+  images?: Record<string, string>;
 }
 
-// 极简 Markdown → 行内样式的 HTML（够公众号用；不追求完整 GFM）
+// 极简 Markdown → 行内样式的 HTML（公众号兼容）
 export function markdownToInlineHtml(md: string): string {
   let html = md;
-  // 图片：![alt](src)
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
-    const figure = `<figure><img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"/><figcaption>${escapeText(alt)}</figcaption></figure>`;
-    return figure;
-  });
-  // 链接：[t](u)
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
+    `<figure><img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"/><figcaption>${escapeText(alt)}</figcaption></figure>`);
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-  // 引用
   html = html.replace(/^>\s?(.*)$/gm, '<blockquote>$1</blockquote>');
-  // 标题
   html = html.replace(/^###\s+(.*)$/gm, '<h3>$1</h3>');
   html = html.replace(/^##\s+(.*)$/gm, '<h2>$1</h2>');
   html = html.replace(/^#\s+(.*)$/gm, '<h1>$1</h1>');
-  // 列表
   html = html.replace(/(^|\n)(- .+(?:\n- .+)*)/g, (_, p, block) => {
-    const items = block.split('\n').map((l: string) => l.replace(/^- /, '').trim());
-    return `${p}<ul>${items.map((i: string) => `<li>${i}</li>`).join('')}</ul>`;
+    const items = (block as string).split('\n').map((l) => l.replace(/^- /, '').trim());
+    return `${p}<ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
   });
-  // 分隔线
   html = html.replace(/^---+$/gm, '<hr/>');
-  // 粗体 / 斜体
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  // 行内代码
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  // 段落（按空行分段）
   const blocks = html.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
   html = blocks
-    .map((b) => {
-      if (/^<(h\d|figure|blockquote|ul|ol|hr|pre|img)/.test(b)) return b;
-      return `<p>${b.replace(/\n/g, '<br/>')}</p>`;
-    })
+    .map((b) => (/^<(h\d|figure|blockquote|ul|ol|hr|pre|img)/.test(b) ? b : `<p>${b.replace(/\n/g, '<br/>')}</p>`))
     .join('\n');
   return html;
 }
@@ -99,7 +82,6 @@ export function markdownToInlineHtml(md: string): string {
 function escapeAttr(s: string) { return s.replace(/"/g, '&quot;'); }
 function escapeText(s: string) { return s.replace(/[<>]/g, (c) => (c === '<' ? '&lt;' : '&gt;')); }
 
-// 构建带复制按钮的预览 HTML（本地打开即可用：file:// 下 Clipboard API + execCommand fallback）
 export function buildWechatHtml(opts: BuildOptions): string {
   const body = markdownToInlineHtml(opts.mdBody);
   const eyebrow = opts.eyebrow ? `<div style="font-size:11px;letter-spacing:1.5px;color:#86868b;margin-bottom:18px;">${escapeText(opts.eyebrow.toUpperCase())}</div>` : '';
@@ -126,7 +108,6 @@ ${author}
 </html>`;
 }
 
-// 富文本复制载荷（HTML + 纯文本双格式；图片以 dataURL 嵌入以便公众号后台粘贴）
 export async function buildRichClipboardPayload(
   md: string,
   images: Record<string, string> = {},
@@ -136,12 +117,10 @@ export async function buildRichClipboardPayload(
     const re = new RegExp(`\\(images/${escapeRegex(filename)}\\)`, 'g');
     processed = processed.replace(re, `(${dataUrl})`);
   }
-  const html = markdownToInlineHtml(processed);
-  const text = mdToPlainText(md);
-  return { html, text };
+  return { html: markdownToInlineHtml(processed), text: mdToPlainText(md) };
 }
 
-function mdToPlainText(md: string): string {
+export function mdToPlainText(md: string): string {
   return md
     .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -152,27 +131,6 @@ function mdToPlainText(md: string): string {
 
 function escapeRegex(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
-// ZIP 打包：HTML + 图片 + 母稿 md
-export async function buildZip(opts: BuildOptions & { mdRaw: string }): Promise<Blob> {
-  const zip = new JSZip();
-  zip.file('article.md', opts.mdRaw);
-  zip.file('article.html', buildWechatHtml(opts));
-  if (opts.images) {
-    const folder = zip.folder('images');
-    if (folder) {
-      for (const [name, src] of Object.entries(opts.images)) {
-        if (src.startsWith('data:')) {
-          const m = src.match(/^data:[^;]+;base64,(.+)$/);
-          if (m) folder.file(name, m[1], { base64: true });
-        } else {
-          folder.file(name, src);
-        }
-      }
-    }
-  }
-  return zip.generateAsync({ type: 'blob' });
-}
-
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -180,10 +138,7 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 100);
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 
 export async function copyRichToClipboard(html: string, text: string): Promise<boolean> {
@@ -200,9 +155,7 @@ export async function copyRichToClipboard(html: string, text: string): Promise<b
   try {
     await navigator.clipboard.writeText(text);
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 export async function copyImageToClipboard(dataUrl: string): Promise<boolean> {
@@ -212,7 +165,5 @@ export async function copyImageToClipboard(dataUrl: string): Promise<boolean> {
     const blob = await res.blob();
     await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
