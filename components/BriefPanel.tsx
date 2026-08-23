@@ -8,7 +8,7 @@ import { Select } from './ui/select';
 import { cn } from './ui/cn';
 import type { Brief, MaterialType, PlatformId, Voice } from '@/src/lib/types';
 import { PLATFORM_ORDER, PLATFORMS } from '@/src/lib/platforms';
-import { fetchMaterial } from '@/src/lib/ai';
+import { fetchMaterial } from '@/src/lib/fetch';
 
 interface Props {
   brief: Brief;

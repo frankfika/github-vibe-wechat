@@ -5,12 +5,9 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
+import CharacterCount from '@tiptap/extension-character-count';
 import { Bold, Italic, Image as ImageIcon, Heading1, Heading2, List, Quote, Code } from 'lucide-react';
-import { Button } from './ui/button';
 import { cn } from './ui/cn';
-
-// Tiptap 编辑器（中文友好的极简工具栏 + slash 风格的 Markdown 输入）
-// 存储为 HTML；导出时由 export.ts 转回带图注的 Markdown。
 
 export function Editor({
   html,
@@ -25,41 +22,84 @@ export function Editor({
 }) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Image.configure({ inline: false, allowBase64: true }),
       Placeholder.configure({ placeholder }),
+      CharacterCount.configure({}),
     ],
     content: html || '',
     editorProps: {
       attributes: {
-        class:
-          'prose-app max-w-prose focus:outline-none min-h-[60vh] py-6 px-8 mx-auto',
+        class: 'prose-app max-w-prose focus:outline-none min-h-[60vh] py-6 px-8 mx-auto',
+      },
+      handlePaste(view, event) {
+        const items = Array.from(event.clipboardData?.items ?? []);
+        const imageItem = items.find((it) => it.type.startsWith('image/'));
+        if (!imageItem) return false;
+        const file = imageItem.getAsFile();
+        if (!file) return false;
+        const url = URL.createObjectURL(file);
+        const caption = window.prompt('图注（可选，符合"图 N｜描述。图片来源：…"格式更佳）：') ?? '';
+        const alt = caption || '图片';
+        const { state, dispatch } = view;
+        const node = state.schema.nodes.image.create({ src: url, alt });
+        dispatch(state.tr.replaceSelectionWith(node));
+        if (caption) {
+          dispatch(state.tr.insertText(`\n${caption}\n`));
+        }
+        return true;
+      },
+      handleDrop(view, event) {
+        const file = event.dataTransfer?.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return false;
+        event.preventDefault();
+        const url = URL.createObjectURL(file);
+        const caption = window.prompt('图注（可选）：') ?? '';
+        const { state, dispatch } = view;
+        const node = state.schema.nodes.image.create({ src: url, alt: caption || '图片' });
+        const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        const pos = coords?.pos ?? state.selection.from;
+        dispatch(state.tr.insert(pos, node));
+        return true;
       },
     },
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     immediatelyRender: false,
   });
 
-  // 外部 html 变化时（如加载已存在文章）同步进 editor
   React.useEffect(() => {
     if (!editor) return;
-    if (editor.getHTML() !== html) {
-      editor.commands.setContent(html || '', false);
-    }
+    if (editor.getHTML() !== html) editor.commands.setContent(html || '', false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html]);
 
   const insertImage = React.useCallback(() => {
-    const url = window.prompt('图片 URL（或 data:image/...）：');
-    if (!url) return;
-    editor?.chain().focus().setImage({ src: url, alt: '图片' }).run();
+    const choice = window.prompt('图片方式：(1) 粘贴 URL/dataURL；(2) 上传本地文件生成临时 URL\n\n直接输入 URL 或 dataURL，或输入 "upload" 上传本地文件：');
+    if (!choice) return;
+    if (choice.trim().toLowerCase() === 'upload') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = () => {
+        const f = input.files?.[0];
+        if (!f) return;
+        const url = URL.createObjectURL(f);
+        const caption = window.prompt('图注：') ?? '';
+        editor?.chain().focus().setImage({ src: url, alt: caption || '图片' }).run();
+        if (caption) editor?.chain().focus().insertContent(`\n${caption}\n`).run();
+      };
+      input.click();
+      return;
+    }
+    const caption = window.prompt('图注：') ?? '';
+    editor?.chain().focus().setImage({ src: choice, alt: caption || '图片' }).run();
+    if (caption) editor?.chain().focus().insertContent(`\n${caption}\n`).run();
   }, [editor]);
 
-  if (!editor) {
-    return <div className={cn('text-ink-muted text-sm p-8', className)}>加载编辑器…</div>;
-  }
+  if (!editor) return <div className={cn('text-ink-muted text-sm p-8', className)}>加载编辑器…</div>;
+
+  const chars = editor.storage.characterCount?.characters?.() ?? 0;
+  const words = editor.storage.characterCount?.words?.() ?? 0;
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -75,7 +115,7 @@ export function Editor({
           <ToolbarBtn on={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()} aria-label="代码"><Code size={14}/></ToolbarBtn>
           <Sep/>
           <ToolbarBtn onClick={insertImage} aria-label="插入图片"><ImageIcon size={14}/></ToolbarBtn>
-          <div className="ml-auto text-xs text-ink-muted">{editor.storage.characterCount?.characters?.() ?? ''}</div>
+          <div className="ml-auto text-[11px] text-ink-muted tabular-nums">{words} 词 · {chars} 字</div>
         </div>
       </div>
       <EditorContent editor={editor} className="flex-1 overflow-y-auto" />

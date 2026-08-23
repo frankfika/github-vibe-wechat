@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Copy, Check, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from './ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
-import { PLATFORMS, PLATFORM_ORDER } from '@/src/lib/platforms';
+import { PLATFORMS } from '@/src/lib/platforms';
 import type { Article, PlatformId } from '@/src/lib/types';
 import { copyRichToClipboard } from '@/src/lib/export';
 

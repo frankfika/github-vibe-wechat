@@ -7,7 +7,7 @@ import { AppShell } from '@/components/AppShell';
 import { useArticleStore } from '@/src/lib/store';
 import { Button } from '@/components/ui/button';
 import type { Brief } from '@/src/lib/types';
-import { DEFAULT_CONFIG, loadConfig } from '@/src/lib/config';
+import { loadConfig } from '@/src/lib/config';
 
 export default function HomePage() {
   const hydrate = useArticleStore((s) => s.hydrate);

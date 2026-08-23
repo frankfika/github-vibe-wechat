@@ -6,9 +6,9 @@ import { BriefPanel } from '@/components/BriefPanel';
 import { Editor } from '@/components/Editor';
 import { PreviewPane } from '@/components/PreviewPane';
 import { PlatformTabs } from '@/components/PlatformTabs';
+import { ValidationStrip } from '@/components/ValidationStrip';
 import { useArticleStore } from '@/src/lib/store';
-import type { Article, Brief, PlatformId } from '@/src/lib/types';
-import { PLATFORM_ORDER } from '@/src/lib/platforms';
+import type { Brief, PlatformId } from '@/src/lib/types';
 import { buildWechatHtml, buildZip, downloadBlob } from '@/src/lib/export';
 
 export default function ArticlePage({ params }: { params: { id: string } }) {
@@ -108,6 +108,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         </div>
 
         <div className="flex flex-col min-w-0">
+          <ValidationStrip markdown={article.content} />
           <div className="h-[42%] border-b border-ink-line">
             <PreviewPane markdown={article.content} />
           </div>
