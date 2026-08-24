@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { DEFAULT_CONFIG, loadConfig, saveConfig } from '@/src/lib/config';
-import { DEFAULT_AI_CONFIG, loadAiConfig, saveAiConfig, isAiConfigured } from '@/src/lib/ai-config';
+import { DEFAULT_AI_CONFIG, loadAiConfig, saveAiConfig } from '@/src/lib/ai-config';
+import { useAiStatus } from '@/src/lib/use-ai-status';
 import type { AiConfig } from '@/src/lib/ai-config';
 import type { CreatorConfig, PlatformId, Voice } from '@/src/lib/types';
 import { PLATFORM_ORDER, PLATFORMS } from '@/src/lib/platforms';
@@ -15,15 +16,18 @@ export default function SettingsPage() {
   const [cfg, setCfg] = React.useState<CreatorConfig>(DEFAULT_CONFIG);
   const [ai, setAi] = React.useState<AiConfig>(DEFAULT_AI_CONFIG);
   const [saved, setSaved] = React.useState(false);
+  const { aiReady } = useAiStatus();
 
   React.useEffect(() => {
     setCfg(loadConfig());
     setAi(loadAiConfig());
   }, []);
 
+  const flashTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const flash = () => {
     setSaved(true);
-    setTimeout(() => setSaved(false), 1200);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setSaved(false), 1000);
   };
 
   const update = (patch: Partial<CreatorConfig>) => {
@@ -54,9 +58,9 @@ export default function SettingsPage() {
           <p className="text-sm text-ink-muted mb-8">这些默认会应用到所有新文章。改完自动保存到浏览器本地。</p>
 
           <Section title="AI 模型">
-            {isAiConfigured(ai) ? (
+            {aiReady ? (
               <p className="text-[12.5px] text-emerald-700 inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"/> AI 密钥已配置，可直接生成
+                <span className="w-2 h-2 rounded-full bg-emerald-500"/> AI 已可用，可直接生成
               </p>
             ) : (
               <p className="text-[12.5px] text-amber-700">尚未配置 AI 密钥，生成不可用；编辑器 / 预览 / 平台稿 / 导出不受影响。</p>
@@ -109,9 +113,6 @@ export default function SettingsPage() {
             </Field>
             <Field label="作者署名（文末）">
               <Input value={cfg.authorSignature} onChange={(e) => update({ authorSignature: e.target.value })} placeholder="如 陈放Frank" />
-            </Field>
-            <Field label="账号名">
-              <Input value={cfg.accountName} onChange={(e) => update({ accountName: e.target.value })} />
             </Field>
           </Section>
 

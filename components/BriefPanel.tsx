@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Sparkles, Loader2, Link as LinkIcon } from 'lucide-react';
+import { Sparkles, Loader2, Link as LinkIcon, FileInput } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input, Textarea } from './ui/input';
 import { Select } from './ui/select';
@@ -15,6 +15,8 @@ interface Props {
   brief: Brief;
   onChange: (brief: Brief) => void;
   onGenerate: () => Promise<void>;
+  onImportMaterial: (material: string) => void;
+  onError?: (message: string) => void;
   generating: boolean;
 }
 
@@ -26,7 +28,7 @@ const MATERIAL_OPTIONS: { value: MaterialType; label: string }[] = [
   { value: 'copy', label: '已有文案（只排版）' },
 ];
 
-export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
+export function BriefPanel({ brief, onChange, onGenerate, onImportMaterial, onError, generating }: Props) {
   const { aiReady, refresh } = useAiStatus();
   const [showGuide, setShowGuide] = React.useState(false);
   const [fetching, setFetching] = React.useState(false);
@@ -50,11 +52,11 @@ export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ url: brief.material }),
       });
-      if (!res.ok) throw new Error(`抓取失败 (HTTP ${res.status})`);
+      if (res.ok === false) throw new Error(`抓取失败 (HTTP ${res.status})`);
       const { text } = (await res.json()) as { text: string | null };
       if (text) update({ material: `${brief.material}\n\n---\n${text}` });
     } catch (e) {
-      alert((e as Error).message || '抓取失败');
+      (onError ?? ((m: string) => alert(m)))((e as Error).message || '抓取失败');
     } finally {
       setFetching(false);
     }
@@ -106,6 +108,16 @@ export function BriefPanel({ brief, onChange, onGenerate, generating }: Props) {
             </Button>
           )}
         </div>
+        <Button
+          variant="outline"
+          size="md"
+          className="w-full mt-1.5"
+          onClick={() => onImportMaterial(brief.material)}
+          disabled={!brief.material.trim()}
+          title="把素材直接放进编辑器（不调用 AI），适合纯排版 / 手动微调"
+        >
+          <FileInput size={14}/> 导入素材到编辑器
+        </Button>
       </Field>
 
       <Field label="角度 / 立场" hint="这是文章的灵魂：你的判断，不是最安全的概括">

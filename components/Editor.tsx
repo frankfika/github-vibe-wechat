@@ -2,17 +2,19 @@
 
 import * as React from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
+import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import { Bold, Italic, Image as ImageIcon, Heading1, Heading2, List, Quote, Code } from 'lucide-react';
 import { cn } from './ui/cn';
+import { downscaleImage, blobToDataUrl } from '@/src/lib/images';
 
 export function Editor({
   html,
   onChange,
-  placeholder = '从这里开始写——或者在左侧创作指令面板里点"生成"。',
+  placeholder = '从这里开始写——或者在左侧创作指令面板里点「生成」。',
   className,
 }: {
   html: string;
@@ -38,28 +40,15 @@ export function Editor({
         if (!imageItem) return false;
         const file = imageItem.getAsFile();
         if (!file) return false;
-        const url = URL.createObjectURL(file);
-        const caption = window.prompt('图注（可选，符合"图 N｜描述。图片来源：…"格式更佳）：') ?? '';
-        const alt = caption || '图片';
-        const { state, dispatch } = view;
-        const node = state.schema.nodes.image.create({ src: url, alt });
-        dispatch(state.tr.replaceSelectionWith(node));
-        if (caption) {
-          dispatch(state.tr.insertText(`\n${caption}\n`));
-        }
+        event.preventDefault();
+        void insertImageFile(view, file, null);
         return true;
       },
       handleDrop(view, event) {
         const file = event.dataTransfer?.files?.[0];
         if (!file || !file.type.startsWith('image/')) return false;
         event.preventDefault();
-        const url = URL.createObjectURL(file);
-        const caption = window.prompt('图注（可选）：') ?? '';
-        const { state, dispatch } = view;
-        const node = state.schema.nodes.image.create({ src: url, alt: caption || '图片' });
-        const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
-        const pos = coords?.pos ?? state.selection.from;
-        dispatch(state.tr.insert(pos, node));
+        void insertImageFile(view, file, { x: event.clientX, y: event.clientY });
         return true;
       },
     },
@@ -74,7 +63,8 @@ export function Editor({
   }, [html]);
 
   const insertImage = React.useCallback(() => {
-    const choice = window.prompt('图片方式：(1) 粘贴 URL/dataURL；(2) 上传本地文件生成临时 URL\n\n直接输入 URL 或 dataURL，或输入 "upload" 上传本地文件：');
+    if (!editor) return;
+    const choice = window.prompt('图片方式：(1) 粘贴图片 URL 或 dataURL；(2) 输入 upload 上传本地文件');
     if (!choice) return;
     if (choice.trim().toLowerCase() === 'upload') {
       const input = document.createElement('input');
@@ -83,44 +73,81 @@ export function Editor({
       input.onchange = () => {
         const f = input.files?.[0];
         if (!f) return;
-        const url = URL.createObjectURL(f);
-        const caption = window.prompt('图注：') ?? '';
-        editor?.chain().focus().setImage({ src: url, alt: caption || '图片' }).run();
-        if (caption) editor?.chain().focus().insertContent(`\n${caption}\n`).run();
+        void insertImageFile(editor.view, f, null);
       };
       input.click();
       return;
     }
-    const caption = window.prompt('图注：') ?? '';
-    editor?.chain().focus().setImage({ src: choice, alt: caption || '图片' }).run();
-    if (caption) editor?.chain().focus().insertContent(`\n${caption}\n`).run();
+    const src = choice.trim();
+    const caption = window.prompt('图注（可选）：') ?? '';
+    const alt = caption || '图片';
+    const { state } = editor;
+    const pos = state.selection.from;
+    const node = state.schema.nodes.image.create({ src, alt });
+    let tr = state.tr.replaceSelectionWith(node);
+    // 光标会被放在图片节点上（NodeSelection），显式在图片之后插入图注，避免覆盖图片
+    if (caption) tr = tr.insertText(`\n${caption}\n`, Math.min(pos + node.nodeSize, tr.doc.content.size));
+    editor.view.dispatch(tr);
   }, [editor]);
 
   if (!editor) return <div className={cn('text-ink-muted text-sm p-8', className)}>加载编辑器…</div>;
 
   const chars = editor.storage.characterCount?.characters?.() ?? 0;
-  const words = editor.storage.characterCount?.words?.() ?? 0;
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
       <div className="sticky top-0 z-10 border-b border-ink-line bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-prose flex items-center gap-1 px-4 py-2">
-          <ToolbarBtn on={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} aria-label="H1"><Heading1 size={14}/></ToolbarBtn>
-          <ToolbarBtn on={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} aria-label="H2"><Heading2 size={14}/></ToolbarBtn>
+          <ToolbarBtn on={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="一级标题" aria-label="H1"><Heading1 size={14}/></ToolbarBtn>
+          <ToolbarBtn on={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="二级标题" aria-label="H2"><Heading2 size={14}/></ToolbarBtn>
           <Sep/>
-          <ToolbarBtn on={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} aria-label="加粗"><Bold size={14}/></ToolbarBtn>
-          <ToolbarBtn on={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} aria-label="斜体"><Italic size={14}/></ToolbarBtn>
-          <ToolbarBtn on={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} aria-label="引用"><Quote size={14}/></ToolbarBtn>
-          <ToolbarBtn on={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} aria-label="列表"><List size={14}/></ToolbarBtn>
-          <ToolbarBtn on={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()} aria-label="代码"><Code size={14}/></ToolbarBtn>
+          <ToolbarBtn on={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="加粗" aria-label="加粗"><Bold size={14}/></ToolbarBtn>
+          <ToolbarBtn on={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="斜体" aria-label="斜体"><Italic size={14}/></ToolbarBtn>
+          <ToolbarBtn on={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="引用" aria-label="引用"><Quote size={14}/></ToolbarBtn>
+          <ToolbarBtn on={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} title="无序列表" aria-label="列表"><List size={14}/></ToolbarBtn>
+          <ToolbarBtn on={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()} title="行内代码" aria-label="代码"><Code size={14}/></ToolbarBtn>
           <Sep/>
-          <ToolbarBtn onClick={insertImage} aria-label="插入图片"><ImageIcon size={14}/></ToolbarBtn>
-          <div className="ml-auto text-[11px] text-ink-muted tabular-nums">{words} 词 · {chars} 字</div>
+          <ToolbarBtn onClick={insertImage} title="插入图片" aria-label="插入图片"><ImageIcon size={14}/></ToolbarBtn>
+          <div className="ml-auto text-[11px] text-ink-muted tabular-nums">{chars} 字</div>
         </div>
       </div>
       <EditorContent editor={editor} className="flex-1 overflow-y-auto" />
     </div>
   );
+}
+
+// 图片文件 → 降采样 dataURL → 单事务插入（图片 + 图注），避免对旧 state 二次 dispatch
+async function insertImageFile(
+  view: EditorView,
+  file: File,
+  at: { x: number; y: number } | null,
+) {
+  let dataUrl: string;
+  try {
+    dataUrl = await downscaleImage(file);
+  } catch {
+    try {
+      dataUrl = await blobToDataUrl(file);
+    } catch {
+      return;
+    }
+  }
+  const caption = window.prompt('图注（可选，符合「图 N｜描述。图片来源：…」格式更佳）：') ?? '';
+  const alt = caption || '图片';
+  const { state } = view;
+  const node = state.schema.nodes.image.create({ src: dataUrl, alt });
+  const pos = at
+    ? view.posAtCoords({ left: at.x, top: at.y })?.pos ?? state.selection.from
+    : state.selection.from;
+  const tr = state.tr;
+  if (at) {
+    tr.insert(pos, node);
+  } else {
+    tr.replaceSelectionWith(node);
+  }
+  // 光标会落在图片节点上（NodeSelection），显式在图片之后插入图注，避免覆盖图片
+  if (caption) tr.insertText(`\n${caption}\n`, Math.min(pos + node.nodeSize, tr.doc.content.size));
+  view.dispatch(tr);
 }
 
 function ToolbarBtn({ on, onClick, children, ...rest }: { on?: boolean; onClick: () => void; children: React.ReactNode; [k: string]: unknown }) {

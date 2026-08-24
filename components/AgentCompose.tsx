@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Sparkles, Loader2, Link as LinkIcon, ChevronDown } from 'lucide-react';
+import { Sparkles, Loader2, Link as LinkIcon, ChevronDown, FileInput } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input, Textarea } from './ui/input';
 import { Select } from './ui/select';
@@ -16,6 +16,8 @@ interface Props {
   brief: Brief;
   onChange: (brief: Brief) => void;
   onGenerate: () => Promise<void>;
+  onImportMaterial: (material: string) => void;
+  onError?: (message: string) => void;
   generating: boolean;
 }
 
@@ -28,7 +30,7 @@ const VOICE_LABELS: Record<Voice, string> = {
 
 // Agent 优先的极简编排器：只露出「素材 + 发布地点 + 生成」，
 // 语气/长度/标题/CTA/双语/细粒度平台全部折叠进高级抽屉。
-export function AgentCompose({ brief, onChange, onGenerate, generating }: Props) {
+export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, onError, generating }: Props) {
   const { aiReady, refresh } = useAiStatus();
   const [showGuide, setShowGuide] = React.useState(false);
   const [fetching, setFetching] = React.useState(false);
@@ -62,11 +64,11 @@ export function AgentCompose({ brief, onChange, onGenerate, generating }: Props)
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ url: brief.material }),
       });
-      if (!res.ok) throw new Error(`抓取失败 (HTTP ${res.status})`);
+      if (res.ok === false) throw new Error(`抓取失败 (HTTP ${res.status})`);
       const { text } = (await res.json()) as { text: string | null };
       if (text) update({ material: `${brief.material}\n\n---\n${text}` });
     } catch (e) {
-      alert((e as Error).message || '抓取失败');
+      (onError ?? ((m: string) => alert(m)))((e as Error).message || '抓取失败');
     } finally {
       setFetching(false);
     }
@@ -107,6 +109,16 @@ export function AgentCompose({ brief, onChange, onGenerate, generating }: Props)
             </Button>
           )}
         </div>
+        <Button
+          variant="outline"
+          size="md"
+          className="w-full mt-1.5"
+          onClick={() => onImportMaterial(brief.material)}
+          disabled={!brief.material.trim()}
+          title="把素材直接放进编辑器（不调用 AI），适合纯排版 / 手动微调"
+        >
+          <FileInput size={14}/> 导入素材到编辑器
+        </Button>
       </Field>
 
       {/* 发布场景 */}
@@ -122,7 +134,7 @@ export function AgentCompose({ brief, onChange, onGenerate, generating }: Props)
               {s.label}
             </Chip>
           ))}
-          <Chip active={!selectedScene} onClick={() => update({ scene: undefined })} title="按 Agent 默认平台">
+          <Chip active={!selectedScene} onClick={() => update({ scene: undefined, platforms: agent.defaults.platforms ? [...agent.defaults.platforms] : [] })} title="按 Agent 默认平台">
             默认
           </Chip>
         </div>

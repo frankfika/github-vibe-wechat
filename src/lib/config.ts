@@ -5,11 +5,9 @@ export const DEFAULT_CONFIG: CreatorConfig = {
   bilingual: false,
   voice: 'relaxed',
   seriesTitle: '',
-  accountName: '陈放Frank',
   authorSignature: '',
   wechatEyebrow: "FRANK'S AI NOTES / TOPIC",
   newsEyebrow: 'FIELD NOTES / NEWS',
-  askWhenMissing: true,
 };
 
 const STORAGE_KEY = 'pencil:config:v1';

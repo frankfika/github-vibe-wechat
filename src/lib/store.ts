@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Article, Brief, PlatformId } from './types';
 
 const STORAGE_KEY = 'pencil:articles:v1';
+const SAVE_DEBOUNCE_MS = 400;
 
 function loadAll(): Article[] {
   if (typeof window === 'undefined') return [];
@@ -14,9 +15,33 @@ function loadAll(): Article[] {
   }
 }
 
-function saveAll(articles: Article[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(articles));
+// 配额（QuotaExceededError）等写入失败不抛未捕获异常：内容仍保留在内存里，
+// 控制台给出提示，避免整篇文章丢失 / 编辑器崩溃。
+function saveAll(articles: Article[]): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(articles));
+    return true;
+  } catch (e) {
+    console.warn('[OmniWriter] 本地保存失败（可能超出 localStorage 配额）：', e);
+    return false;
+  }
+}
+
+// 内容类更新（击键）做防抖批量落盘，结构性操作（新建/删除）立即落盘
+let pending: Article[] | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function queueSave(articles: Article[]) {
+  pending = articles;
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    if (pending) {
+      saveAll(pending);
+      pending = null;
+    }
+  }, SAVE_DEBOUNCE_MS);
 }
 
 function uid(): string {
@@ -62,7 +87,7 @@ export const useArticleStore = create<Store>((set, get) => ({
     const articles = get().articles.map((a) =>
       a.id === id ? { ...a, ...patch, updatedAt: Date.now() } : a,
     );
-    saveAll(articles);
+    queueSave(articles);
     set({ articles });
   },
   setContent: (id, content) => {

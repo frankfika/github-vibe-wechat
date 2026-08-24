@@ -22,7 +22,6 @@ export interface Brief {
   platforms: PlatformId[];
   bilingual: boolean;
   titleHint?: string;
-  imagePlan?: string;
   cta?: string;
   agentId?: string; // 来自 Agent 市场；缺省为手动模式（旧文章向后兼容）
   scene?: string;   // 选中的发布场景 id
@@ -43,9 +42,7 @@ export interface CreatorConfig {
   bilingual: boolean;
   voice: Voice;
   seriesTitle: string;
-  accountName: string;
   authorSignature: string;
   wechatEyebrow: string;
   newsEyebrow: string;
-  askWhenMissing: boolean;
 }

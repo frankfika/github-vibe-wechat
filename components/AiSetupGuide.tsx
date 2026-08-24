@@ -41,7 +41,7 @@ export function AiSetupGuide({ onRefresh, compact = false }: Props) {
       )}
       <div className="mt-2 flex items-center gap-2">
         <Button size="sm" variant="outline" onClick={doRefresh} disabled={checking}>
-          {checking ? '检测中…' : ok ? '已配置' : '我已配置，重新检测'}
+          {checking ? '检测中…' : ok ? '已配置' : '重新检测'}
         </Button>
         {ok && (
           <span className="inline-flex items-center gap-1 text-emerald-700">

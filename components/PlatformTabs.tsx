@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { PLATFORMS, PLATFORM_ORDER } from '@/src/lib/platforms';
 import type { Article, PlatformId } from '@/src/lib/types';
 import { copyRichToClipboard } from '@/src/lib/export-html';
+import { cn } from './ui/cn';
 
 export function PlatformTabs({
   article,
@@ -25,11 +26,21 @@ export function PlatformTabs({
   const [tab, setTab] = React.useState<PlatformId>(available[0] ?? 'wechat');
   const [copied, setCopied] = React.useState<PlatformId | null>(null);
 
+  // 当可用平台集合变化导致当前 Tab 失效时，回退到第一个平台
+  React.useEffect(() => {
+    if (!available.includes(tab)) setTab(available[0] ?? 'wechat');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article.brief.platforms.join(',')]);
+
   const draft = article.platformDrafts[tab] ?? '';
   const spec = PLATFORMS[tab];
 
   const onCopy = async () => {
-    const ok = await copyRichToClipboard(`<pre>${escapeHtml(draft)}</pre>`, draft);
+    // 只有富文本平台（公众号/知乎）复制带样式的 HTML；其余按纯文本复制
+    const isRich = spec.copyMode === 'rich';
+    const ok = isRich
+      ? await copyRichToClipboard(`<pre>${escapeHtml(draft)}</pre>`, draft)
+      : await copyRichToClipboard('', draft);
     if (ok) {
       setCopied(tab);
       setTimeout(() => setCopied(null), 1800);
@@ -101,8 +112,8 @@ function PlatformBody({
   return (
     <div className="flex flex-col gap-3 pt-2">
       <div className="text-xs text-ink-muted">
-        <span className="font-medium text-ink-soft">{spec.label}</span> · {spec.shape} · {spec.depth} · 复制模式 {spec.copyMode}
-        {spec.maxChars ? ` · ≤${spec.maxChars} 字` : ''}
+        <span className="font-medium text-ink-soft">{spec.label}</span> · {spec.shape} · {spec.depth}
+        {spec.maxChars ? ` · 建议 ≤${spec.maxChars} 字` : ''}
       </div>
       <textarea
         value={draft}
@@ -120,7 +131,14 @@ function PlatformBody({
           {copied ? <Check size={13} className="mr-1"/> : <Copy size={13} className="mr-1"/>}
           {copied ? '已复制' : '复制文案'}
         </Button>
-        <span className="text-xs text-ink-muted ml-auto">{draft.length} 字</span>
+        <span
+          className={cn(
+            'text-xs ml-auto tabular-nums',
+            spec.maxChars && draft.length > spec.maxChars ? 'text-red-600 font-medium' : 'text-ink-muted',
+          )}
+        >
+          {draft.length}{spec.maxChars ? ` / ${spec.maxChars} 字` : ' 字'}
+        </span>
       </div>
     </div>
   );

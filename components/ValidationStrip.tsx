@@ -7,7 +7,8 @@ import { cn } from './ui/cn';
 
 export function ValidationStrip({ markdown }: { markdown: string }) {
   const issues = React.useMemo(() => validateMarkdown(markdown || ''), [markdown]);
-  if (issues.length === 0) return null;
+  // 空内容不预警（避免一进文章页就亮红「缺少 h1」）
+  if (!markdown.trim() || issues.length === 0) return null;
 
   const high = issues.filter((i) => i.severity === 'high');
   const med = issues.filter((i) => i.severity === 'medium');

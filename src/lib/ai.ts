@@ -53,8 +53,9 @@ export async function generateMaster(
   material: string,
   directive?: string,
   ai?: AiLike,
+  opts: { seriesTitle?: string } = {},
 ): Promise<string> {
-  const user = buildUserPrompt(brief, material);
+  const user = buildUserPrompt(brief, material, opts.seriesTitle);
   const system = directive
     ? `${MASTER_SYSTEM}\n\n## 本 Agent 写作指令\n${directive}`
     : MASTER_SYSTEM;
@@ -67,7 +68,7 @@ export async function generateMaster(
   return extractText(msg);
 }
 
-function buildUserPrompt(brief: Brief, material: string): string {
+function buildUserPrompt(brief: Brief, material: string, seriesTitle?: string): string {
   const parts: string[] = [];
   parts.push('## 素材');
   parts.push(brief.materialType === 'news' ? `[新闻链接/资讯]\n${material || brief.material}` : material || brief.material);
@@ -77,6 +78,8 @@ function buildUserPrompt(brief: Brief, material: string): string {
   parts.push(`- 语气：${brief.voice}`);
   parts.push(`- 长度：${brief.length === 'short' ? '短（<800 字）' : brief.length === 'long' ? '长（>2000 字）' : '中（800–2000 字）'}`);
   if (brief.titleHint) parts.push(`- 标题方向：${brief.titleHint}`);
+  if (seriesTitle) parts.push(`- 标题前缀（用户配置的系列名）：${seriesTitle}；仅当标题适合时用「${seriesTitle}｜」前缀，新闻/推荐类默认不用`);
+  if (brief.bilingual) parts.push('- 输出中英双语：中文正文之后附完整英文版，用 "## English Version" 分隔');
   if (brief.cta) parts.push(`- CTA：${brief.cta}`);
   if (brief.materialType === 'news') parts.push(`\n${FACT_CHECK_RULES}`);
   parts.push('\n仅输出 Markdown。');
@@ -105,24 +108,6 @@ export async function adaptPlatform(
     messages: [{ role: 'user', content: user }],
   });
   return extractText(msg);
-}
-
-export async function adaptAllPlatforms(
-  brief: Brief,
-  master: string,
-  platforms: PlatformId[],
-  onOne?: (p: PlatformId, text: string) => void,
-): Promise<Record<string, string>> {
-  const targets = platforms.length ? platforms : PLATFORM_ORDER;
-  const out: Record<string, string> = {};
-  await Promise.all(
-    targets.map(async (p) => {
-      const text = await adaptPlatform(brief, master, p);
-      out[p] = text;
-      onOne?.(p, text);
-    }),
-  );
-  return out;
 }
 
 function extractText(msg: { content: Array<{ type: string; text?: string }> }): string {

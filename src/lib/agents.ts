@@ -235,7 +235,3 @@ export function mergeBrief(
     ...custom,
   };
 }
-
-export function defaultSceneFor(agent: WriterAgent): string {
-  return agent.id;
-}

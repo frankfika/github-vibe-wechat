@@ -19,8 +19,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   React.useEffect(() => { hydrate(); }, [hydrate]);
 
   return (
-    <div className="h-screen w-screen grid grid-cols-[260px_1fr] overflow-hidden">
-      <aside className="border-r border-ink-line bg-ink-panel/30 flex flex-col">
+    <div className="h-screen w-screen grid grid-cols-1 xl:grid-cols-[260px_1fr] overflow-hidden">
+      <aside className="hidden xl:flex border-r border-ink-line bg-ink-panel/30 flex-col">
         <div className="px-4 h-12 flex items-center border-b border-ink-line">
           <Link href="/" className="font-semibold tracking-tightish">OmniWriter</Link>
           <span className="ml-2 text-[11px] text-ink-muted">写作 × 多平台</span>
@@ -55,7 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         if (active) router.push('/');
                       }
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-ink-muted hover:text-red-600"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-red-600 opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                     title="删除"
                   >
                     <Trash2 size={12}/>
@@ -78,7 +78,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
       </aside>
-      <main className="overflow-hidden">{children}</main>
+
+      <div className="flex flex-col min-w-0">
+        {/* 移动端顶栏 */}
+        <div className="xl:hidden flex items-center justify-between px-4 h-12 border-b border-ink-line bg-white shrink-0">
+          <Link href="/" className="font-semibold tracking-tightish">OmniWriter</Link>
+          <div className="flex items-center gap-4 text-sm">
+            <Link href="/" className="inline-flex items-center gap-1 hover:text-ink text-ink-muted">
+              <Plus size={14}/> 选 Agent
+            </Link>
+            <Link href="/settings" className="inline-flex items-center gap-1 hover:text-ink text-ink-muted">
+              <Settings size={14}/> 设置
+            </Link>
+          </div>
+        </div>
+        <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
+      </div>
     </div>
   );
 }

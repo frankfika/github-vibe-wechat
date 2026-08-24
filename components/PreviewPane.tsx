@@ -3,15 +3,25 @@
 import * as React from 'react';
 import { Copy, Check, Smartphone, Monitor } from 'lucide-react';
 import { Button } from './ui/button';
-import { copyRichToClipboard, markdownToInlineHtml } from '@/src/lib/export-html';
+import { copyRichToClipboard, wechatBody, mdToPlainText } from '@/src/lib/export-html';
+import { loadConfig } from '@/src/lib/config';
+import type { MaterialType } from '@/src/lib/types';
 
-export function PreviewPane({ markdown }: { markdown: string }) {
+export function PreviewPane({ markdown, materialType }: { markdown: string; materialType?: MaterialType }) {
   const [copied, setCopied] = React.useState(false);
   const [width, setWidth] = React.useState<'mobile' | 'desktop'>('mobile');
-  const html = React.useMemo(() => markdownToInlineHtml(markdown || ''), [markdown]);
+
+  // 预览与「复制公众号正文」共用同一份：行内样式 + Eyebrow + 署名
+  const html = React.useMemo(() => {
+    const cfg = loadConfig();
+    return wechatBody(markdown || '', {
+      eyebrow: materialType === 'news' ? cfg.newsEyebrow : cfg.wechatEyebrow,
+      author: cfg.authorSignature,
+    });
+  }, [markdown, materialType]);
 
   const onCopy = async () => {
-    const ok = await copyRichToClipboard(html, markdown);
+    const ok = await copyRichToClipboard(html, mdToPlainText(markdown || ''));
     if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);

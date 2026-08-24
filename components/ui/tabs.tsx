@@ -29,7 +29,7 @@ export function Tabs({
 
 export function TabsList({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn('flex flex-wrap gap-1 border-b border-ink-line', className)}>{children}</div>
+    <div role="tablist" className={cn('flex flex-wrap gap-1 border-b border-ink-line', className)}>{children}</div>
   );
 }
 
@@ -38,6 +38,8 @@ export function TabsTrigger({ value, children }: { value: string; children: Reac
   const active = ctx.value === value;
   return (
     <button
+      role="tab"
+      aria-selected={active}
       onClick={() => ctx.setValue(value)}
       className={cn(
         'h-8 px-3 text-sm border-b-2 -mb-px transition-colors',
@@ -54,5 +56,5 @@ export function TabsTrigger({ value, children }: { value: string; children: Reac
 export function TabsContent({ value, children, className }: { value: string; children: React.ReactNode; className?: string }) {
   const ctx = React.useContext(TabsContext)!;
   if (ctx.value !== value) return null;
-  return <div className={cn('pt-3', className)}>{children}</div>;
+  return <div role="tabpanel" className={cn('pt-3', className)}>{children}</div>;
 }
