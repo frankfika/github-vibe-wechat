@@ -11,7 +11,7 @@ export interface AiConfig {
 export const DEFAULT_AI_CONFIG: AiConfig = {
   apiKey: '',
   baseUrl: 'https://api.minimaxi.com/anthropic',
-  model: 'MiniMax-M3',
+  model: 'MiniMax-M2.7',
 };
 
 const STORAGE_KEY = 'omniwriter:ai:v1';

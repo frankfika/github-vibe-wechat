@@ -1,0 +1,87 @@
+x-app-env: &app-env
+  NODE_ENV: production
+  ANTHROPIC_API_KEY_FILE: /run/secrets/anthropic_api_key
+  ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.minimaxi.com/anthropic}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-MiniMax-M2.7}
+  FETCH_TIMEOUT_MS: ${FETCH_TIMEOUT_MS:-15000}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-app: &app
+  image: ${OMNIWRITER_IMAGE_REPOSITORY:?set OMNIWRITER_IMAGE_REPOSITORY}:${APP_VERSION:?set APP_VERSION}
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  mem_limit: 640m
+  pids_limit: 256
+  environment: *app-env
+  secrets:
+    - anthropic_api_key
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/ready"]
+    interval: 15s
+    timeout: 3s
+    retries: 3
+    start_period: 20s
+  logging: *logging
+  networks: [omniwriter]
+
+services:
+  app-a:
+    <<: *app
+    environment:
+      <<: *app-env
+      INSTANCE_ID: app-a
+    ports:
+      - "127.0.0.1:${OMNIWRITER_PORT_A:-3011}:3000"
+
+  app-b:
+    <<: *app
+    environment:
+      <<: *app-env
+      INSTANCE_ID: app-b
+    ports:
+      - "127.0.0.1:${OMNIWRITER_PORT_B:-3012}:3000"
+
+  gateway:
+    image: ${NGINX_IMAGE:-docker.m.daocloud.io/library/nginx:1.27-alpine}
+    restart: unless-stopped
+    init: true
+    mem_limit: 96m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      app-a:
+        condition: service_healthy
+      app-b:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${OMNIWRITER_GATEWAY_PORT:-3080}:80"
+    volumes:
+      - ./deploy/nginx.compose.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging: *logging
+    networks: [omniwriter]
+
+secrets:
+  anthropic_api_key:
+    file: ${ANTHROPIC_API_KEY_SECRET_FILE:-./secrets/anthropic_api_key}
+
+networks:
+  omniwriter:

@@ -3,9 +3,8 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { FileText, Settings, Plus, Trash2 } from 'lucide-react';
+import { Blocks, FileText, PenLine, Settings, Trash2 } from 'lucide-react';
 import { useArticleStore } from '@/src/lib/store';
-import { Button } from './ui/button';
 import { cn } from './ui/cn';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -15,25 +14,67 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hydrated = useArticleStore((s) => s.hydrated);
   const articles = useArticleStore((s) => s.articles);
   const remove = useArticleStore((s) => s.remove);
+  const flush = useArticleStore((s) => s.flush);
+  const visibleArticles = articles.slice(0, 8);
 
   React.useEffect(() => { hydrate(); }, [hydrate]);
 
+  React.useEffect(() => {
+    const persist = () => { flush(); };
+    const persistWhenHidden = () => {
+      if (document.visibilityState === 'hidden') persist();
+    };
+    const saveShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      persist();
+    };
+    window.addEventListener('pagehide', persist);
+    document.addEventListener('visibilitychange', persistWhenHidden);
+    window.addEventListener('keydown', saveShortcut);
+    return () => {
+      window.removeEventListener('pagehide', persist);
+      document.removeEventListener('visibilitychange', persistWhenHidden);
+      window.removeEventListener('keydown', saveShortcut);
+    };
+  }, [flush]);
+
   return (
-    <div className="h-screen w-screen grid grid-cols-1 xl:grid-cols-[260px_1fr] overflow-hidden">
-      <aside className="hidden xl:flex border-r border-ink-line bg-ink-panel/30 flex-col">
-        <div className="px-4 h-12 flex items-center border-b border-ink-line">
+    <div className="h-[100dvh] w-full grid grid-rows-1 grid-cols-1 xl:grid-cols-[260px_1fr] overflow-hidden app-workspace-bg">
+      <aside className="hidden xl:flex border-r border-white/80 bg-white/70 backdrop-blur-xl flex-col shadow-[8px_0_30px_rgba(15,23,42,0.04)]">
+        <div className="px-4 h-14 flex items-center border-b border-ink-line/70">
+          <span className="mr-2 size-6 rounded-lg bg-gradient-to-br from-slate-900 to-indigo-600 shadow-sm"/>
           <Link href="/" className="font-semibold tracking-tightish">OmniWriter</Link>
-          <span className="ml-2 text-[11px] text-ink-muted">写作 × 多平台</span>
+          <span className="ml-2 text-[10px] text-indigo-600">AI STUDIO</span>
         </div>
-        <div className="p-2">
-          <Button onClick={() => router.push('/')} size="md" className="w-full"><Plus size={14} className="mr-1.5"/> 选 Agent</Button>
+        <div className="p-2 space-y-1">
+          <Link
+            href="/"
+            className={cn(
+              'flex items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium hover:bg-white',
+              pathname === '/' && 'bg-white text-indigo-950 shadow-[inset_2px_0_0_#6366f1,0_2px_10px_rgba(15,23,42,0.05)]',
+            )}
+          >
+            <PenLine size={14} className="text-indigo-600"/>
+            创作台
+          </Link>
+          <Link
+            href="/marketplace"
+            className={cn(
+              'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-white',
+              pathname === '/marketplace' && 'bg-white',
+            )}
+          >
+            <Blocks size={13} className="text-ink-muted"/>
+            能力市场
+          </Link>
         </div>
         <nav className="flex-1 overflow-y-auto px-1.5 pb-2">
           {hydrated && articles.length === 0 && (
-            <div className="px-3 py-6 text-xs text-ink-muted">还没有文章。点「选 Agent」开始。</div>
+            <div className="px-3 py-6 text-xs text-ink-muted">还没有文章。选一个 Agent 开始。</div>
           )}
           <ul className="flex flex-col gap-0.5">
-            {articles.map((a) => {
+            {visibleArticles.map((a) => {
               const active = pathname === `/article/${a.id}`;
               return (
                 <li key={a.id} className="group relative">
@@ -41,7 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     href={`/article/${a.id}`}
                     className={cn(
                       'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-white',
-                      active && 'bg-white shadow-[inset_2px_0_0_#1d1d1f]',
+                      active && 'bg-white text-indigo-950 shadow-[inset_2px_0_0_#6366f1,0_2px_10px_rgba(15,23,42,0.05)]',
                     )}
                   >
                     <FileText size={13} className="text-ink-muted shrink-0"/>
@@ -64,6 +105,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </ul>
+          {articles.length > visibleArticles.length && (
+            <Link href="/" className="block px-3 py-2 text-[11px] text-ink-muted hover:text-ink">
+              还有 {articles.length - visibleArticles.length} 篇，在首页查看
+            </Link>
+          )}
         </nav>
         <div className="p-2 border-t border-ink-line">
           <Link
@@ -81,14 +127,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-col min-w-0">
         {/* 移动端顶栏 */}
-        <div className="xl:hidden flex items-center justify-between px-4 h-12 border-b border-ink-line bg-white shrink-0">
-          <Link href="/" className="font-semibold tracking-tightish">OmniWriter</Link>
-          <div className="flex items-center gap-4 text-sm">
-            <Link href="/" className="inline-flex items-center gap-1 hover:text-ink text-ink-muted">
-              <Plus size={14}/> 选 Agent
+        <div className="xl:hidden flex items-center justify-between gap-3 px-4 h-12 border-b border-white/80 bg-white/80 backdrop-blur-xl shrink-0">
+          <Link href="/" className="h-10 shrink-0 font-semibold tracking-tightish inline-flex items-center gap-2"><span className="size-5 rounded-md bg-gradient-to-br from-slate-900 to-indigo-600"/>OmniWriter</Link>
+          <div className="flex items-center gap-1 sm:gap-3 text-sm">
+            <Link href="/" aria-label="创作台" title="创作台" className={cn('h-10 w-10 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink', pathname === '/' ? 'bg-white text-indigo-700' : 'text-ink-muted')}>
+              <PenLine size={14}/><span className="hidden sm:inline">创作</span>
             </Link>
-            <Link href="/settings" className="inline-flex items-center gap-1 hover:text-ink text-ink-muted">
-              <Settings size={14}/> 设置
+            <Link href="/marketplace" aria-label="能力市场" title="能力市场" className="h-10 w-10 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink text-ink-muted">
+              <Blocks size={14}/><span className="hidden sm:inline">市场</span>
+            </Link>
+            <Link href="/settings" aria-label="设置" title="设置" className="h-10 w-10 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink text-ink-muted">
+              <Settings size={14}/><span className="hidden sm:inline">设置</span>
             </Link>
           </div>
         </div>

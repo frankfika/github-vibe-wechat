@@ -2,37 +2,47 @@
   "name": "creator-platform",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.12.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "audit:mobile": "node scripts/audit-mobile.mjs",
+    "verify:product": "node scripts/verify-product.mjs",
+    "verify:recovery": "node scripts/verify-recovery.mjs",
+    "verify:observability": "node scripts/verify-observability.mjs",
+    "audit:accessibility": "node scripts/audit-accessibility.mjs",
+    "verify:ha": "bash scripts/verify-ha.sh"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.32.1",
+    "@tiptap/extension-character-count": "^2.6.6",
+    "@tiptap/extension-image": "^2.6.6",
+    "@tiptap/extension-placeholder": "^2.6.6",
+    "@tiptap/pm": "^2.6.6",
+    "@tiptap/react": "^2.6.6",
+    "@tiptap/starter-kit": "^2.6.6",
+    "class-variance-authority": "0.7.0",
+    "clsx": "2.1.1",
+    "html-to-image": "1.11.13",
+    "jszip": "3.10.1",
+    "lucide-react": "0.453.0",
     "next": "14.2.15",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@tiptap/react": "^2.6.6",
-    "@tiptap/starter-kit": "^2.6.6",
-    "@tiptap/extension-image": "^2.6.6",
-    "@tiptap/extension-placeholder": "^2.6.6",
-    "@tiptap/extension-character-count": "^2.6.6",
-    "@tiptap/pm": "^2.6.6",
-    "zustand": "4.5.5",
-    "@anthropic-ai/sdk": "0.32.1",
-    "jszip": "3.10.1",
-    "lucide-react": "0.453.0",
-    "clsx": "2.1.1",
     "tailwind-merge": "2.5.4",
-    "class-variance-authority": "0.7.0"
+    "undici": "^6.28.0",
+    "zustand": "4.5.5"
   },
   "devDependencies": {
-    "typescript": "5.6.3",
+    "playwright-core": "1.55.0",
     "@types/node": "22.7.5",
     "@types/react": "18.3.11",
     "@types/react-dom": "18.3.0",
-    "tailwindcss": "3.4.13",
+    "autoprefixer": "10.4.20",
     "postcss": "8.4.47",
-    "autoprefixer": "10.4.20"
+    "tailwindcss": "3.4.13",
+    "typescript": "5.6.3"
   }
 }

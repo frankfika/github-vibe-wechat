@@ -42,7 +42,7 @@ export function TabsTrigger({ value, children }: { value: string; children: Reac
       aria-selected={active}
       onClick={() => ctx.setValue(value)}
       className={cn(
-        'h-8 px-3 text-sm border-b-2 -mb-px transition-colors',
+        'h-10 px-3 text-sm whitespace-nowrap shrink-0 border-b-2 -mb-px transition-colors sm:h-8',
         active
           ? 'border-ink text-ink font-medium'
           : 'border-transparent text-ink-muted hover:text-ink',

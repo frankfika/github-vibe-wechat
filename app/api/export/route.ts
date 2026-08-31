@@ -12,12 +12,13 @@ interface ExportImage {
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, md, eyebrow, author, images } = (await req.json()) as {
+    const { title, md, eyebrow, author, images, templateId } = (await req.json()) as {
       title?: string;
       md?: string;
       eyebrow?: string;
       author?: string;
       images?: ExportImage[];
+      templateId?: string;
     };
     const content = md ?? '';
     const imageMap: Record<string, string> = {};
@@ -27,14 +28,20 @@ export async function POST(req: NextRequest) {
       imageMap[im.file] = im.dataUrl;
       srcMap[im.src] = im.file; // buildWechatHtml 内改写为 images/xx
     }
+    const articleTitle = title || 'article';
+    const rawMarkdown = htmlToMarkdown(rewriteImageSrcs(content, srcMap));
+    const markdownWithTitle = /^#\s+\S/m.test(rawMarkdown)
+      ? rawMarkdown
+      : `# ${articleTitle}\n\n${rawMarkdown}`;
     const zip = await buildZip({
-      title: title || 'article',
+      title: articleTitle,
       mdBody: content,
-      mdRaw: htmlToMarkdown(rewriteImageSrcs(content, srcMap)), // 文章内图片指向 images/ 下的文件
+      mdRaw: markdownWithTitle, // 文章内图片指向 images/ 下的文件，并保证单一主标题
       eyebrow,
       author,
       images: imageMap,
       imageSrcMap: srcMap,
+      templateId,
     });
     const buf = Buffer.from(await zip.arrayBuffer());
     const name = slug(title || 'article');

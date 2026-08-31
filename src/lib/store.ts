@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { Article, Brief, PlatformId } from './types';
+import { loadConfig } from './config';
+import { mergeArticles } from './backup';
 
 const STORAGE_KEY = 'pencil:articles:v1';
 const SAVE_DEBOUNCE_MS = 400;
@@ -31,17 +33,43 @@ function saveAll(articles: Article[]): boolean {
 // 内容类更新（击键）做防抖批量落盘，结构性操作（新建/删除）立即落盘
 let pending: Article[] | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingResult: ((ok: boolean) => void) | null = null;
 
-function queueSave(articles: Article[]) {
+function queueSave(articles: Article[], onResult: (ok: boolean) => void) {
   pending = articles;
+  pendingResult = onResult;
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = null;
     if (pending) {
-      saveAll(pending);
+      const ok = saveAll(pending);
       pending = null;
+      pendingResult?.(ok);
+      pendingResult = null;
     }
   }, SAVE_DEBOUNCE_MS);
+}
+
+// A structural write must supersede any older debounced keystroke snapshot.
+// Otherwise an old timer can resurrect a deleted article or drop a newly-created one.
+function cancelPendingSave() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  pending = null;
+  pendingResult = null;
+}
+
+function flushPendingSave(): boolean {
+  if (!pending) return true;
+  if (saveTimer) clearTimeout(saveTimer);
+  const articles = pending;
+  const onResult = pendingResult;
+  saveTimer = null;
+  pending = null;
+  pendingResult = null;
+  const ok = saveAll(articles);
+  onResult?.(ok);
+  return ok;
 }
 
 function uid(): string {
@@ -51,22 +79,27 @@ function uid(): string {
 interface Store {
   articles: Article[];
   hydrated: boolean;
+  saveState: 'saved' | 'saving' | 'error';
   hydrate: () => void;
+  flush: () => boolean;
   create: (brief: Brief) => Article;
   get: (id: string) => Article | undefined;
   update: (id: string, patch: Partial<Article>) => void;
   setContent: (id: string, content: string) => void;
   setDraft: (id: string, platform: PlatformId, draft: string) => void;
   remove: (id: string) => void;
+  restore: (articles: Article[]) => { total: number; saved: boolean };
 }
 
 export const useArticleStore = create<Store>((set, get) => ({
   articles: [],
   hydrated: false,
+  saveState: 'saved',
   hydrate: () => {
     if (get().hydrated) return;
     set({ articles: loadAll(), hydrated: true });
   },
+  flush: () => flushPendingSave(),
   create: (brief) => {
     const article: Article = {
       id: uid(),
@@ -74,12 +107,14 @@ export const useArticleStore = create<Store>((set, get) => ({
       brief,
       content: '',
       platformDrafts: {},
+      templateId: loadConfig().defaultTemplateId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
     const articles = [article, ...get().articles];
-    saveAll(articles);
-    set({ articles });
+    cancelPendingSave();
+    const saved = saveAll(articles);
+    set({ articles, saveState: saved ? 'saved' : 'error' });
     return article;
   },
   get: (id) => get().articles.find((a) => a.id === id),
@@ -87,8 +122,8 @@ export const useArticleStore = create<Store>((set, get) => ({
     const articles = get().articles.map((a) =>
       a.id === id ? { ...a, ...patch, updatedAt: Date.now() } : a,
     );
-    queueSave(articles);
-    set({ articles });
+    set({ articles, saveState: 'saving' });
+    queueSave(articles, (saved) => set({ saveState: saved ? 'saved' : 'error' }));
   },
   setContent: (id, content) => {
     get().update(id, { content });
@@ -101,7 +136,16 @@ export const useArticleStore = create<Store>((set, get) => ({
   },
   remove: (id) => {
     const articles = get().articles.filter((a) => a.id !== id);
-    saveAll(articles);
-    set({ articles });
+    cancelPendingSave();
+    const saved = saveAll(articles);
+    set({ articles, saveState: saved ? 'saved' : 'error' });
+  },
+  restore: (incoming) => {
+    flushPendingSave();
+    cancelPendingSave();
+    const articles = mergeArticles(get().articles, incoming);
+    const saved = saveAll(articles);
+    set({ articles, saveState: saved ? 'saved' : 'error' });
+    return { total: articles.length, saved };
   },
 }));

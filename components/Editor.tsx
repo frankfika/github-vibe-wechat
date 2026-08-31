@@ -7,25 +7,55 @@ import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
-import { Bold, Italic, Image as ImageIcon, Heading1, Heading2, List, Quote, Code } from 'lucide-react';
+import { Bold, Italic, Image as ImageIcon, Heading1, Heading2, List, Quote, Code, Images } from 'lucide-react';
 import { cn } from './ui/cn';
 import { downscaleImage, blobToDataUrl } from '@/src/lib/images';
+
+const EvidenceImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      sourceUrl: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-source-url'),
+        renderHTML: (attributes) => attributes.sourceUrl ? { 'data-source-url': attributes.sourceUrl } : {},
+      },
+      sourceLabel: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-source-label'),
+        renderHTML: (attributes) => attributes.sourceLabel ? { 'data-source-label': attributes.sourceLabel } : {},
+      },
+      imageLicense: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-image-license'),
+        renderHTML: (attributes) => attributes.imageLicense ? { 'data-image-license': attributes.imageLicense } : {},
+      },
+      creator: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-creator'),
+        renderHTML: (attributes) => attributes.creator ? { 'data-creator': attributes.creator } : {},
+      },
+    };
+  },
+});
 
 export function Editor({
   html,
   onChange,
+  onFindImages,
   placeholder = '从这里开始写——或者在左侧创作指令面板里点「生成」。',
   className,
 }: {
   html: string;
   onChange: (html: string) => void;
+  onFindImages?: () => void;
   placeholder?: string;
   className?: string;
 }) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      Image.configure({ inline: false, allowBase64: true }),
+      EvidenceImage.configure({ inline: false, allowBase64: true }),
       Placeholder.configure({ placeholder }),
       CharacterCount.configure({}),
     ],
@@ -33,6 +63,9 @@ export function Editor({
     editorProps: {
       attributes: {
         class: 'prose-app max-w-prose focus:outline-none min-h-[60vh] py-6 px-8 mx-auto',
+        role: 'textbox',
+        'aria-label': '文章正文编辑器',
+        'aria-multiline': 'true',
       },
       handlePaste(view, event) {
         const items = Array.from(event.clipboardData?.items ?? []);
@@ -97,7 +130,7 @@ export function Editor({
   return (
     <div className={cn('flex flex-col h-full', className)}>
       <div className="sticky top-0 z-10 border-b border-ink-line bg-white/80 backdrop-blur">
-        <div className="mx-auto max-w-prose flex items-center gap-1 px-4 py-2">
+        <div className="mx-auto max-w-prose flex items-center gap-1 overflow-x-auto px-4 py-2">
           <ToolbarBtn on={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="一级标题" aria-label="H1"><Heading1 size={14}/></ToolbarBtn>
           <ToolbarBtn on={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="二级标题" aria-label="H2"><Heading2 size={14}/></ToolbarBtn>
           <Sep/>
@@ -107,8 +140,19 @@ export function Editor({
           <ToolbarBtn on={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} title="无序列表" aria-label="列表"><List size={14}/></ToolbarBtn>
           <ToolbarBtn on={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()} title="行内代码" aria-label="代码"><Code size={14}/></ToolbarBtn>
           <Sep/>
-          <ToolbarBtn onClick={insertImage} title="插入图片" aria-label="插入图片"><ImageIcon size={14}/></ToolbarBtn>
-          <div className="ml-auto text-[11px] text-ink-muted tabular-nums">{chars} 字</div>
+          {onFindImages ? (
+            <button
+              type="button"
+              onClick={onFindImages}
+              className="h-10 shrink-0 px-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors sm:h-7 sm:px-2 sm:text-xs"
+              title="联网查找并插入有来源的图片"
+            >
+              <Images size={14}/> 配图
+            </button>
+          ) : (
+            <ToolbarBtn onClick={insertImage} title="插入图片" aria-label="插入图片"><ImageIcon size={14}/></ToolbarBtn>
+          )}
+          <div className="ml-auto shrink-0 text-[11px] text-ink-muted tabular-nums">{chars} 字</div>
         </div>
       </div>
       <EditorContent editor={editor} className="flex-1 overflow-y-auto" />
@@ -155,7 +199,7 @@ function ToolbarBtn({ on, onClick, children, ...rest }: { on?: boolean; onClick:
     <button
       onClick={onClick}
       className={cn(
-        'h-7 w-7 inline-flex items-center justify-center rounded text-ink-soft hover:bg-ink-panel',
+        'h-10 w-10 shrink-0 inline-flex items-center justify-center rounded text-ink-soft hover:bg-ink-panel sm:h-7 sm:w-7',
         on && 'bg-ink-panel text-ink',
       )}
       {...rest}
@@ -164,4 +208,4 @@ function ToolbarBtn({ on, onClick, children, ...rest }: { on?: boolean; onClick:
     </button>
   );
 }
-function Sep() { return <span className="mx-1 h-4 w-px bg-ink-line" />; }
+function Sep() { return <span className="mx-1 h-4 w-px shrink-0 bg-ink-line" />; }

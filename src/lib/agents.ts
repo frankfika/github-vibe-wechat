@@ -2,7 +2,7 @@ import type { Brief, PlatformId } from './types';
 import { PLATFORM_ORDER } from './platforms';
 
 // ===== Agent 市场数据模型 =====
-// 一个 Agent = 一套预置的写作偏好（语气/长度/平台/角度/写作指令），
+// 一个 Agent = 一套预置的写作偏好（风格/长度/平台/角度/写作指令），
 // 用户只需选一张卡片 → 贴素材 → 标发布场景 → 生成。
 
 export type AgentGroup = 'news' | 'opinion' | 'project' | 'commercial' | 'craft';
@@ -32,6 +32,7 @@ export interface WriterAgent {
   defaults: Partial<Brief>;
   inputHint: string;
   directive: string; // 追加进生成提示的写作指令（风格/结构/事实层级）
+  pluginIds: string[]; // 运行这条工作流时会调用的内置能力
 }
 
 // ===== 发布场景（一次点选即解析出平台集合）=====
@@ -54,13 +55,14 @@ export const AGENTS: WriterAgent[] = [
     group: 'news',
     defaults: {
       materialType: 'news',
-      voice: 'editorial',
+      voice: 'newswire',
       length: 'medium',
       platforms: ['wechat', 'x', 'zhihu'],
       angle: '这篇新闻对普通读者真正重要的判断',
     },
     inputHint: '贴新闻链接（可抓取正文）或粘贴文本…',
     directive: '数据与事实分层：先给判断，再给证据链，标注「据X报道」与日期；克制评论，不写情绪化断言。',
+    pluginIds: ['web-reader', 'editorial-check', 'platform-adapter'],
   },
   {
     id: 'opinion',
@@ -71,13 +73,14 @@ export const AGENTS: WriterAgent[] = [
     group: 'opinion',
     defaults: {
       materialType: 'topic',
-      voice: 'relaxed',
+      voice: 'essay',
       length: 'medium',
       platforms: ['wechat', 'x', 'zhihu', 'xiaohongshu'],
       angle: '',
     },
     inputHint: '贴主题、痛点或素材，并写下你的判断…',
     directive: '论点先行，长短句交替，第一人称真实经验；避免空泛口号与 AI 味排比。',
+    pluginIds: ['editorial-check', 'platform-adapter'],
   },
   {
     id: 'project-launch',
@@ -88,13 +91,14 @@ export const AGENTS: WriterAgent[] = [
     group: 'project',
     defaults: {
       materialType: 'project-own',
-      voice: 'technical',
+      voice: 'maker',
       length: 'long',
       platforms: ['x', 'hacker-news', 'reddit', 'csdn', 'zhihu', 'wechat'],
       angle: '动机 + 端到端流程 + 威胁模型 + 技术栈 + 仓库体验',
     },
     inputHint: '贴项目名、仓库链接或功能描述…',
     directive: '按 Show HN 结构组织：动机→端到端流程→关键设计选择→威胁模型→技术栈→仓库体验→具体讨论问题。',
+    pluginIds: ['editorial-check', 'platform-adapter', 'export-pack'],
   },
   {
     id: 'project-review',
@@ -105,13 +109,14 @@ export const AGENTS: WriterAgent[] = [
     group: 'project',
     defaults: {
       materialType: 'project-third',
-      voice: 'editorial',
+      voice: 'explainer',
       length: 'medium',
       platforms: ['wechat', 'zhihu', 'x'],
       angle: '值得关注的技术选择 + 具体场景价值',
     },
     inputHint: '贴第三方开源项目链接或介绍…',
     directive: '把机制讲给外行听懂；讲清谁受益谁受损；落到具体可验证的判断。',
+    pluginIds: ['web-reader', 'editorial-check', 'platform-adapter'],
   },
   {
     id: 'market-pulse',
@@ -129,6 +134,7 @@ export const AGENTS: WriterAgent[] = [
     },
     inputHint: '贴行业新闻、财报或访谈要点…',
     directive: '数据给出来源与报道时间；竞争格局逐层展开；给可证伪判断，不写营销腔。',
+    pluginIds: ['web-reader', 'editorial-check', 'platform-adapter'],
   },
   {
     id: 'ph-launch',
@@ -139,13 +145,14 @@ export const AGENTS: WriterAgent[] = [
     group: 'commercial',
     defaults: {
       materialType: 'project-own',
-      voice: 'market',
+      voice: 'maker',
       length: 'medium',
       platforms: ['product-hunt'],
       angle: '目标用户是谁、解决了什么',
     },
     inputHint: '贴产品名、描述、目标用户…',
     directive: '字段化输出 Name/Tagline/Short Description/Topics，再加第一人称 Maker Comment：动机/流程/安全/限制/征求反馈。',
+    pluginIds: ['editorial-check', 'platform-adapter'],
   },
   {
     id: 'xiaohongshu',
@@ -156,13 +163,14 @@ export const AGENTS: WriterAgent[] = [
     group: 'craft',
     defaults: {
       materialType: 'topic',
-      voice: 'relaxed',
+      voice: 'social',
       length: 'short',
       platforms: ['xiaohongshu'],
       angle: '真实体验 + 避坑点',
     },
     inputHint: '贴产品 / 体验 / 场景…',
     directive: '口语化种草：图先文后逻辑，5-8 个相关标签，结尾互动问题；不夸张不承诺。',
+    pluginIds: ['editorial-check', 'image-pack', 'platform-adapter'],
   },
   {
     id: 'bilibili',
@@ -173,20 +181,21 @@ export const AGENTS: WriterAgent[] = [
     group: 'craft',
     defaults: {
       materialType: 'topic',
-      voice: 'relaxed',
+      voice: 'script',
       length: 'medium',
       platforms: ['bilibili'],
       angle: '视频悬念钩子',
     },
     inputHint: '贴选题、口播要点或资料…',
     directive: '输出短视频发布包：封面标题→分段口播提纲（每段一个钩子）→置顶评论→标签。',
+    pluginIds: ['editorial-check', 'platform-adapter'],
   },
   {
     id: 'copy-format',
     emoji: '🧪',
     name: '纯排版',
     tagline: '已有文案，原样排版校验',
-    description: '已有文案原样保留，只做校验与公众号石墨排版——未配 AI key 也能跑通整套发布流程。',
+    description: '已有文案原样保留，只做校验与公众号成品排版——未配 AI key 也能跑通整套发布流程。',
     group: 'craft',
     defaults: {
       materialType: 'copy',
@@ -197,6 +206,7 @@ export const AGENTS: WriterAgent[] = [
     },
     inputHint: '粘贴已有文案（不改内容，只排版）…',
     directive: '不改原文内容，仅整理为符合编辑准则的排版；不做 AI 改写。',
+    pluginIds: ['editorial-check', 'wechat-layout', 'image-pack', 'export-pack'],
   },
 ];
 

@@ -15,6 +15,8 @@
   --wechat-muted: #86868b;
   --wechat-hairline: #d2d2d7;
   --wechat-soft: #f5f5f7;
+  --app-accent: #6366f1;
+  --app-accent-soft: #eef2ff;
 }
 
 html, body {
@@ -27,6 +29,16 @@ html, body {
 
 body {
   font-feature-settings: "kern", "liga", "calt";
+}
+
+.app-workspace-bg {
+  background-color: #f7f8fc;
+  background-image:
+    radial-gradient(circle at 14% 0%, rgba(99, 102, 241, 0.11), transparent 28%),
+    radial-gradient(circle at 90% 8%, rgba(14, 165, 233, 0.08), transparent 24%),
+    linear-gradient(rgba(99, 102, 241, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 32px 32px, 32px 32px;
 }
 
 /* App-wide typographic defaults (apply better-typography) */
@@ -43,6 +55,9 @@ body {
   letter-spacing: -0.014em;
   color: var(--ink);
   margin: 0 0 0.6em;
+}
+@media (max-width: 640px) {
+  .prose-app h1 { font-size: 26px; }
 }
 .prose-app h2 {
   font-size: 21px;
@@ -80,6 +95,15 @@ body {
   border-radius: 3px;
   font-size: 0.92em;
 }
+
+/* Platform drafts are rendered with inline publishing styles. Tailwind's reset
+   removes native list markers, so restore the structure users will publish. */
+.platform-rendered ul { list-style: disc; }
+.platform-rendered ol { list-style: decimal; }
+.platform-rendered ul ul { list-style: circle; }
+.platform-rendered ol ol { list-style: lower-alpha; }
+.platform-rendered li::marker { color: var(--ink-muted); }
+.platform-rendered > :last-child { margin-bottom: 0 !important; }
 
 /* Tiptap focus */
 .ProseMirror:focus { outline: none; }
@@ -137,3 +161,16 @@ body {
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--ink-line); border-radius: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+@media (pointer: coarse) {
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+}
+
+/* Prevent iOS Safari from zooming focused form controls on phones. */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

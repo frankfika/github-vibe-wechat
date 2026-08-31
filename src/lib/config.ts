@@ -1,4 +1,5 @@
 import type { CreatorConfig } from './types';
+import { DEFAULT_WECHAT_TEMPLATE_ID } from './templates';
 
 export const DEFAULT_CONFIG: CreatorConfig = {
   defaultPlatforms: ['wechat', 'x', 'zhihu', 'xiaohongshu'],
@@ -8,6 +9,7 @@ export const DEFAULT_CONFIG: CreatorConfig = {
   authorSignature: '',
   wechatEyebrow: "FRANK'S AI NOTES / TOPIC",
   newsEyebrow: 'FIELD NOTES / NEWS',
+  defaultTemplateId: DEFAULT_WECHAT_TEMPLATE_ID,
 };
 
 const STORAGE_KEY = 'pencil:config:v1';

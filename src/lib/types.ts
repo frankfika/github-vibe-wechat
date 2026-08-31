@@ -1,4 +1,15 @@
-export type Voice = 'relaxed' | 'editorial' | 'technical' | 'market';
+export type Voice =
+  | 'relaxed'
+  | 'editorial'
+  | 'technical'
+  | 'market'
+  | 'newswire'
+  | 'explainer'
+  | 'essay'
+  | 'maker'
+  | 'research'
+  | 'social'
+  | 'script';
 
 export type MaterialType = 'news' | 'project-own' | 'project-third' | 'topic' | 'copy';
 
@@ -33,8 +44,26 @@ export interface Article {
   brief: Brief;
   content: string;           // Markdown 母稿
   platformDrafts: Partial<Record<PlatformId, string>>;
+  templateId?: string;       // 公众号排版模板；缺省时使用当前默认模板（兼容旧文章）
+  conversation?: CreatorMessage[];
   createdAt: number;
   updatedAt: number;
+}
+
+export type CreatorAgentId =
+  | 'chief-editor'
+  | 'researcher'
+  | 'visual-editor'
+  | 'layout-editor'
+  | 'distribution-editor'
+  | 'qa-editor';
+
+export interface CreatorMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: number;
+  agentId?: CreatorAgentId;
 }
 
 export interface CreatorConfig {
@@ -45,4 +74,6 @@ export interface CreatorConfig {
   authorSignature: string;
   wechatEyebrow: string;
   newsEyebrow: string;
+  defaultTemplateId: string;
+  marketStyleId?: Voice; // 用户在能力市场主动选择的跨 Agent 风格；缺省时由 Agent 自己决定
 }

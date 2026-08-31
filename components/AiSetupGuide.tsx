@@ -27,7 +27,7 @@ export function AiSetupGuide({ onRefresh, compact = false }: Props) {
       {!compact && (
         <ol className="list-decimal pl-4 space-y-1 text-[12.5px] text-amber-900/90">
           <li>
-            打开<Link href="/settings" className="underline">设置 → AI 模型</Link>
+            打开<Link href="/settings" className="underline">设置 → AI 连接</Link>
             （或侧栏「设置」）。
           </li>
           <li>

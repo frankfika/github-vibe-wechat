@@ -1,40 +1,12 @@
 // 导出工具（客户端安全）：Markdown → 公众号兼容 HTML、行内样式注入、富文本复制、HTML → Markdown。
 // 不依赖 Node-only 包（无 JSZip）。ZIP 打包走 src/lib/export-zip.ts（服务端）。
+import { resolveWechatTemplate } from './templates';
 
-export const WECHAT_INLINE_CSS = `
-body{margin:0;padding:0;background:#fff;color:#1d1d1f;-webkit-font-smoothing:antialiased;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
-h1{font-size:22px;font-weight:700;line-height:1.32;color:#1d1d1f;margin:0 0 14px;letter-spacing:-0.011em;}
-h2{font-size:18px;font-weight:650;color:#1d1d1f;margin:28px 0 10px;padding-bottom:6px;border-bottom:1px solid #d2d2d7;}
-p{margin:0 0 14px;font-size:16px;line-height:1.9;color:#29292c;}
-blockquote{background:#f5f5f7;border-left:3px solid #1d1d1f;padding:10px 14px;margin:16px 0;color:#29292c;border-radius:0 4px 4px 0;}
-img{display:block;width:100%;height:auto;border-radius:4px;margin:18px 0;}
-figure{margin:18px 0;}
-figcaption{font-size:13px;color:#86868b;margin-top:6px;line-height:1.5;}
-a{color:#1d1d1f;text-decoration:underline;text-decoration-color:#d2d2d7;text-underline-offset:3px;}
-ul,ol{padding-left:1.4em;margin:0 0 14px;}
-li{margin:4px 0;}
-code{font-family:"JetBrains Mono",ui-monospace,monospace;background:#f5f5f7;padding:2px 6px;border-radius:3px;font-size:0.92em;}
-hr{border:none;border-top:1px solid #d2d2d7;margin:24px 0;}
-`.trim();
+export const WECHAT_INLINE_CSS = resolveWechatTemplate().styles.css;
 
 // 行内样式映射（与 WECHAT_INLINE_CSS 视觉一致）。
 // 公众号编辑器会剥离 <style>，所以复制/导出时每个元素必须自带 style 属性。
-export const INLINE_STYLES: Record<string, string> = {
-  h1: 'font-size:22px;font-weight:700;line-height:1.32;color:#1d1d1f;margin:0 0 14px;letter-spacing:-0.011em;',
-  h2: 'font-size:18px;font-weight:650;color:#1d1d1f;margin:28px 0 10px;padding-bottom:6px;border-bottom:1px solid #d2d2d7;',
-  h3: 'font-size:16px;font-weight:600;color:#1d1d1f;margin:20px 0 8px;',
-  p: 'margin:0 0 14px;font-size:16px;line-height:1.9;color:#29292c;',
-  blockquote: 'background:#f5f5f7;border-left:3px solid #1d1d1f;padding:10px 14px;margin:16px 0;color:#29292c;border-radius:0 4px 4px 0;',
-  img: 'display:block;width:100%;height:auto;border-radius:4px;margin:18px 0;',
-  figure: 'margin:18px 0;',
-  figcaption: 'font-size:13px;color:#86868b;margin-top:6px;line-height:1.5;',
-  a: 'color:#1d1d1f;text-decoration:underline;text-decoration-color:#d2d2d7;text-underline-offset:3px;',
-  ul: 'padding-left:1.4em;margin:0 0 14px;',
-  ol: 'padding-left:1.4em;margin:0 0 14px;',
-  li: 'margin:4px 0;',
-  code: 'font-family:"JetBrains Mono",ui-monospace,monospace;background:#f5f5f7;padding:2px 6px;border-radius:3px;font-size:0.92em;',
-  hr: 'border:none;border-top:1px solid #d2d2d7;margin:24px 0;',
-};
+export const INLINE_STYLES: Record<string, string> = resolveWechatTemplate().styles.elements;
 
 export interface BuildOptions {
   title: string;
@@ -43,6 +15,7 @@ export interface BuildOptions {
   mdBody: string; // Markdown 或已渲染 HTML
   images?: Record<string, string>; // 文件名 → dataURL（写入 ZIP 的 images/）
   imageSrcMap?: Record<string, string>; // 原 src → 新 src（用于把内嵌图改写为 images/ 路径）
+  templateId?: string;
 }
 
 // ---- 基础转义 ----
@@ -68,7 +41,11 @@ export function decodeHtml(s: string) {
 
 // 输入是否已经是 HTML（Tiptap 输出等）→ 直接走直通分支，避免二次 markdown 化
 function looksLikeHtml(s: string): boolean {
-  return /<(h[1-6]|p|div|blockquote|img|figure|ul|ol|li|pre|code|br|strong|em|a|hr)[\s>]/i.test(s);
+  const trimmed = s.trim();
+  const hasMarkdownBlocks = /(^|\n)\s{0,3}(?:#{1,6}\s|>\s?|[-*+]\s+|\d+\.\s+|```)/m.test(trimmed);
+  // 编辑器产生的整段 HTML 需要直通；Markdown 中夹入的 <img> 等原生标签仍应继续解析标题和列表。
+  return !hasMarkdownBlocks
+    && /^<(h[1-6]|p|div|blockquote|img|figure|ul|ol|li|pre|code|br|strong|em|a|hr)[\s>]/i.test(trimmed);
 }
 
 // 只转义标签外的文本节点（保留已有实体，避免 &amp; → &amp;amp;）
@@ -115,9 +92,10 @@ function escapeTextNodes(html: string): string {
 }
 
 // 给已知标签注入行内样式（合并已有 style 属性，已有属性优先保留）
-export function applyInlineStyles(html: string): string {
-  return html.replace(/<(h[1-6]|p|blockquote|figure|figcaption|img|a|ul|ol|li|code|hr)\b([^>]*)>/gi, (full, tag, rest) => {
-    const style = INLINE_STYLES[tag.toLowerCase()];
+export function applyInlineStyles(html: string, templateId?: string): string {
+  const template = resolveWechatTemplate(templateId);
+  let styled = html.replace(/<(h[1-6]|p|blockquote|figure|figcaption|img|a|ul|ol|li|strong|em|pre|code|hr)\b([^>]*)>/gi, (full, tag, rest) => {
+    const style = template.styles.elements[tag.toLowerCase() as keyof typeof template.styles.elements];
     if (!style) return full;
     const restStr = (rest ?? '').trim();
     const selfClose = /\/$/.test(restStr);
@@ -134,6 +112,19 @@ export function applyInlineStyles(html: string): string {
     }
     return `<${tag} ${attrsOut}${selfClose ? '/' : ''}>`;
   });
+  styled = styled.replace(/<blockquote\b[^>]*>[\s\S]*?<\/blockquote>/gi, (block) =>
+    block.replace(/<p\b[^>]*>/gi, (tag) => appendInlineStyle(tag, template.styles.quoteParagraph)),
+  );
+  styled = styled.replace(/<p\b[^>]*>(\s*<em\b[^>]*>[\s\S]*?<\/em>\s*)<\/p>/gi, (paragraph, inner) =>
+    `${appendInlineStyle(paragraph.slice(0, paragraph.indexOf('>') + 1), template.styles.captionParagraph)}${inner}</p>`,
+  );
+  return styled;
+}
+
+function appendInlineStyle(openingTag: string, style: string): string {
+  const match = openingTag.match(/\bstyle="([^"]*)"/i);
+  if (match) return openingTag.replace(match[0], `style="${match[1].replace(/;?\s*$/, ';')}${style}"`);
+  return openingTag.replace(/>$/, ` style="${style}">`);
 }
 
 // Markdown → 语义 HTML（不做行内样式；输入已是 HTML 时直通，保证幂等）
@@ -210,15 +201,23 @@ function mdToHtml(md: string): string {
 }
 
 // 公众号正文（含行内样式 + 可选 Eyebrow / 署名）——预览与复制共用同一份
-export function wechatBody(mdOrHtml: string, opts: { eyebrow?: string; author?: string } = {}): string {
-  const body = applyInlineStyles(markdownToInlineHtml(mdOrHtml || ''));
-  const eyebrowHtml = opts.eyebrow
-    ? `<div style="font-size:11px;letter-spacing:1.5px;color:#86868b;margin-bottom:18px;">${escapeText(opts.eyebrow.toUpperCase())}</div>`
-    : '';
+export function wechatBody(mdOrHtml: string, opts: { eyebrow?: string; author?: string; title?: string; templateId?: string } = {}): string {
+  const template = resolveWechatTemplate(opts.templateId);
+  let semantic = markdownToInlineHtml(mdOrHtml || '');
+  if (!/<h1\b[^>]*>/i.test(semantic) && opts.title?.trim()) {
+    semantic = `<h1>${escapeText(opts.title.trim())}</h1>${semantic}`;
+  }
+  let body = applyInlineStyles(semantic, template.id);
+  if (opts.eyebrow) {
+    const badge = `<span style="${template.styles.eyebrow}">${escapeText(opts.eyebrow.toUpperCase())}</span><br/>`;
+    body = /<h1\b[^>]*>/i.test(body)
+      ? body.replace(/<h1\b[^>]*>/i, (tag) => `${tag}${badge}`)
+      : `${badge}${body}`;
+  }
   const authorHtml = opts.author
-    ? `<div style="font-size:13px;color:#86868b;margin-top:32px;padding-top:16px;border-top:1px solid #d2d2d7;">${escapeText(opts.author)}</div>`
+    ? `<div style="${template.styles.author}">${escapeText(opts.author)}</div>`
     : '';
-  return eyebrowHtml + body + authorHtml;
+  return `<section id="wechat-content" data-template="${escapeAttr(template.id)}" style="${template.styles.wrapper}">${body}${authorHtml}</section>`;
 }
 
 // 把 HTML 里的图片 src 按映射改写（导出时把内嵌 blob/dataURL 指向 images/ 下的文件）
@@ -231,56 +230,80 @@ export function rewriteImageSrcs(html: string, map: Record<string, string>): str
 }
 
 export function buildWechatHtml(opts: BuildOptions): string {
-  let body = wechatBody(opts.mdBody, { eyebrow: opts.eyebrow, author: opts.author });
+  const template = resolveWechatTemplate(opts.templateId);
+  let body = wechatBody(opts.mdBody, { eyebrow: opts.eyebrow, author: opts.author, title: opts.title, templateId: template.id });
   if (opts.imageSrcMap) body = rewriteImageSrcs(body, opts.imageSrcMap);
+  const copyImageData = opts.images ?? {};
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${escapeText(opts.title)}</title>
-<style>${WECHAT_INLINE_CSS}
-body{padding:24px 20px 80px;}
-.__pcl_toolbar{position:fixed;top:16px;right:16px;z-index:9;}
-.__pcl_toolbar button{background:#1d1d1f;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;}
+<style>${template.styles.css}
+body{padding:0 0 60px;}
+.__pcl_toolbar{position:sticky;top:0;z-index:20;box-sizing:border-box;max-width:760px;margin:0 auto;padding:12px 16px;background:#fff;border-bottom:1px solid #e5e5e7;text-align:center;}
+.__pcl_toolbar button{padding:9px 20px;border:0;border-radius:7px;background:#0a0a0a;color:#fff;font-size:13px;font-weight:600;cursor:pointer;outline:none;box-shadow:none;}
+.__pcl_tip{color:#86868b;font-size:12px;}
+.__pcl_shell{box-sizing:border-box;max-width:760px;margin:0 auto;background:#fff;}
 </style>
 </head>
 <body>
-<div class="__pcl_toolbar"><button id="__pcl_copy">复制公众号正文</button></div>
-<div id="__pcl_body">${body}</div>
-<script>${TOOLBAR_SCRIPT}</script>
+<div class="__pcl_toolbar"><button id="__pcl_copy">复制公众号正文</button><span class="__pcl_tip">　样式与图片会一起复制，可直接粘贴到公众号。</span></div>
+<main class="__pcl_shell"><div id="__pcl_body">${body}</div></main>
+<script>${buildToolbarScript(copyImageData)}</script>
 </body>
 </html>`;
 }
 
-const TOOLBAR_SCRIPT = `
+function buildToolbarScript(copyImageData: Record<string, string>) {
+  return `
 (function(){
+  var COPY_IMAGE_DATA=${JSON.stringify(copyImageData)};
   var btn=document.getElementById('__pcl_copy');
-  if(!btn||!navigator.clipboard)return;
-  btn.addEventListener('click',function(){
-    var src=document.getElementById('__pcl_body');
-    if(!src)return;
-    var html=src.innerHTML;
-    var plain=src.innerText;
-    if(window.ClipboardItem&&navigator.clipboard.write){
-      var item=new ClipboardItem({
-        'text/html':new Blob([html],{type:'text/html'}),
-        'text/plain':new Blob([plain],{type:'text/plain'})
-      });
-      navigator.clipboard.write([item]).then(function(){
-        btn.textContent='已复制，去公众号粘贴';
-      }).catch(function(){ fallback(plain,btn); });
-    }else{
-      fallback(plain,btn);
+  function buildCopyContent(){
+    var content=document.getElementById('wechat-content');
+    var clone=content.cloneNode(true);
+    var originals=content.querySelectorAll('img');
+    clone.querySelectorAll('img').forEach(function(img,index){
+      var source=originals[index]&&originals[index].getAttribute('src');
+      if(source) img.setAttribute('src',COPY_IMAGE_DATA[source]||(originals[index]&&originals[index].src)||source);
+    });
+    return {content:content,clone:clone};
+  }
+  function legacyRichCopy(clone){
+    var staging=document.createElement('div');
+    staging.setAttribute('contenteditable','true');
+    staging.style.position='fixed';staging.style.left='-10000px';
+    staging.appendChild(clone);document.body.appendChild(staging);
+    var range=document.createRange();range.selectNodeContents(staging);
+    var selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);
+    var ok=document.execCommand('copy');selection.removeAllRanges();staging.remove();
+    if(!ok) throw new Error('copy failed');
+  }
+  if(!btn)return;
+  btn.addEventListener('click',async function(){
+    try{
+      btn.textContent='正在处理图片…';
+      var built=buildCopyContent();
+      if(window.isSecureContext&&navigator.clipboard&&window.ClipboardItem&&navigator.clipboard.write){
+        try{
+          await navigator.clipboard.write([new ClipboardItem({
+            'text/html':new Blob([built.clone.outerHTML],{type:'text/html'}),
+            'text/plain':new Blob([built.content.innerText],{type:'text/plain'})
+          })]);
+        }catch(modernError){legacyRichCopy(built.clone);}
+      }else{legacyRichCopy(built.clone);}
+      btn.textContent='已复制，去公众号粘贴';
+      setTimeout(function(){btn.textContent='复制公众号正文';},2200);
+    }catch(error){
+      btn.textContent='复制失败，请重试';
+      setTimeout(function(){btn.textContent='复制公众号正文';},2200);
     }
   });
-  function fallback(t,b){
-    var ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
-    try{document.execCommand('copy');b.textContent='已复制，去公众号粘贴';}catch(e){b.textContent='复制失败，请手动选择';}
-    document.body.removeChild(ta);
-  }
 })();
 `.trim();
+}
 
 // HTML（或 Markdown）→ 纯文本：复制到纯文本场景用
 export function mdToPlainText(md: string): string {
@@ -373,6 +396,23 @@ export async function copyRichToClipboard(html: string, text: string): Promise<b
     /* fallthrough */
   }
   try {
+    if (typeof document !== 'undefined') {
+      const staging = document.createElement('div');
+      staging.setAttribute('contenteditable', 'true');
+      staging.style.position = 'fixed';
+      staging.style.left = '-10000px';
+      staging.innerHTML = html;
+      document.body.appendChild(staging);
+      const range = document.createRange();
+      range.selectNodeContents(staging);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      const ok = document.execCommand('copy');
+      selection?.removeAllRanges();
+      staging.remove();
+      if (ok) return true;
+    }
     await navigator.clipboard.writeText(text);
     return true;
   } catch {

@@ -27,15 +27,14 @@ export const FACT_CHECK_RULES = `## 事实核查（新闻渠道强制）
 
 文内标注事件日期与"截至发文"状态；数据给"报道时间"。`;
 
-export const STYLE_GUIDE = `## 公众号石墨风视觉（构建时应用）
+export const STYLE_GUIDE = `## 公众号结构约束（渲染时应用所选模板）
 
-- 画布 #ffffff；主文 #29292c；标题 #1d1d1f；辅助 #86868b；分割线 #d2d2d7；软面板 #f5f5f7。
-- 字体：系统无衬线栈（PingFang SC / Hiragino Sans GB / Microsoft YaHei 优先）。
-- H1 22px / 700 / 1.32；H2 18px / 650 / 下分割线 / 无图标；正文 16px / 1.9 / 左对齐。
-- 引用：软灰底 + 3px 石墨左边线。
-- 图片：通栏、4px 圆角、无阴影。
-- 链接：石墨色 + 弱下划线。
-- 禁止蓝色强调、渐变、玻璃感、阴影、装饰波浪、大圆角卡片、对齐中文正文。
+- 只允许一个 H1；章节使用 H2，必要时才使用 H3。
+- 正文保持短段落和清晰层级，不用空行堆节奏。
+- 重点判断可使用引用块；列表只用于真正并列的内容。
+- 图片应有具体图注，说明来源、对象或关键信息。
+- 禁止 emoji 标题、无意义装饰卡片、为了排版而改写事实。
+- 字体、颜色、间距与装饰由排版模板负责，正文不写死视觉样式。
 `;
 
 // 粗校验（构建/导出时）
@@ -47,8 +46,11 @@ export interface ValidationIssue {
 export function validateMarkdown(md: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   // 支持 Markdown (#) 和已渲染的 HTML (<h1>) 两种输入
-  const mdH1 = md.match(/^# .+$/gm) ?? [];
-  const htmlH1 = md.match(/<h1[\s>][^<]*<\/h1>/gi) ?? [];
+  const mdH1 = (md.match(/^# .+$/gm) ?? []).filter((heading) => !/^#\s+English\s+Version\s*$/i.test(heading));
+  const htmlH1 = (md.match(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi) ?? []).filter((heading) => {
+    const text = heading.replace(/<[^>]+>/g, '').trim();
+    return !/^English\s+Version$/i.test(text);
+  });
   const h1Count = mdH1.length + htmlH1.length;
   if (h1Count === 0) issues.push({ severity: 'high', message: '缺少 h1 标题' });
   if (h1Count > 1) issues.push({ severity: 'high', message: `有 ${h1Count} 个 h1，应仅保留一个` });

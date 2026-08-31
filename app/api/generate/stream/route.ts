@@ -1,0 +1,128 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { generateMasterStream, type AiLike } from '@/src/lib/ai';
+import { resolveAgent } from '@/src/lib/agents';
+import { validateMarkdown } from '@/src/lib/editorial';
+import type { Brief } from '@/src/lib/types';
+import type { GenerationStreamEvent } from '@/src/lib/generation-events';
+
+export const runtime = 'nodejs';
+
+export async function POST(req: NextRequest) {
+  let body: {
+    brief?: Brief;
+    material?: string;
+    ai?: AiLike;
+    config?: { seriesTitle?: string };
+  };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: '请求内容格式不正确' }, { status: 400 });
+  }
+
+  const brief = body.brief;
+  if (!brief || typeof brief !== 'object') {
+    return NextResponse.json({ error: '缺少创作指令' }, { status: 400 });
+  }
+  const source = body.material ?? brief.material;
+  if (!source || typeof source !== 'string' || !source.trim()) {
+    return NextResponse.json({ error: '请先放入素材' }, { status: 400 });
+  }
+  if (source.length > 100_000) {
+    return NextResponse.json({ error: '素材过长，请控制在 10 万字以内' }, { status: 413 });
+  }
+
+  const requestId = crypto.randomUUID();
+  const startedAt = Date.now();
+  const isBareNewsUrl = brief.materialType === 'news' && /^https?:\/\/\S+$/i.test(source.trim());
+  const encoder = new TextEncoder();
+  let cancelled = false;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: GenerationStreamEvent) => {
+        if (cancelled) return;
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      };
+
+      void (async () => {
+        try {
+          send({
+            type: 'stage', requestId, stage: 'source',
+            label: isBareNewsUrl ? '新闻链接已收到' : brief.materialType === 'news' ? '新闻素材已收到' : '素材已读取',
+            detail: isBareNewsUrl ? '当前只有链接，未提取网页正文' : `${source.trim().length.toLocaleString('zh-CN')} 字`,
+            at: Date.now(),
+          });
+
+          let firstChunk = true;
+          let lastSentChars = 0;
+          let lastSentAt = 0;
+          const directive = resolveAgent(brief.agentId)?.directive;
+          const md = await generateMasterStream(brief, source, directive, body.ai, {
+            seriesTitle: body.config?.seriesTitle,
+            signal: req.signal,
+            onPrepared: () => send({
+              type: 'stage', requestId, stage: 'rules',
+              label: brief.materialType === 'news' ? '新闻来源与引用规则已写入请求' : '写作风格与结构已写入请求',
+              detail: brief.materialType === 'news' ? '要求标明来源、日期，不补写未知事实' : undefined,
+              at: Date.now(),
+            }),
+            onRequested: () => send({
+              type: 'stage', requestId, stage: 'waiting', label: '生成请求已创建，等待首段返回', at: Date.now(),
+            }),
+            onText: (_delta, snapshot) => {
+              const now = Date.now();
+              if (firstChunk) {
+                firstChunk = false;
+                send({
+                  type: 'stage', requestId, stage: 'streaming',
+                  label: brief.materialType === 'news' ? '新闻稿正在生成' : '正文正在生成',
+                  detail: '下方只展示模型实际返回的文字片段', at: now,
+                });
+              }
+              if (snapshot.length - lastSentChars >= 120 || now - lastSentAt >= 800) {
+                lastSentChars = snapshot.length;
+                lastSentAt = now;
+                send({
+                  type: 'delta', requestId, chars: snapshot.length,
+                  preview: snapshot.slice(-180).replace(/\s+/g, ' ').trim(), at: now,
+                });
+              }
+            },
+          });
+
+          send({
+            type: 'stage', requestId, stage: 'checking', label: '正文已收到，正在做标题与基础格式检查',
+            detail: `${md.length.toLocaleString('zh-CN')} 字`, at: Date.now(),
+          });
+          const title = md.match(/^# (.+)$/m)?.[1]?.trim();
+          send({
+            type: 'done', requestId, md, title,
+            durationMs: Date.now() - startedAt,
+            issues: validateMarkdown(md).length,
+            at: Date.now(),
+          });
+          if (!cancelled) controller.close();
+        } catch (error) {
+          if (cancelled) return;
+          const message = (error as Error).name === 'AbortError'
+            ? '生成已停止，原稿没有被覆盖'
+            : (error as Error).message || '生成失败，请重试';
+          send({ type: 'error', requestId, message, retryable: true, at: Date.now() });
+          controller.close();
+        }
+      })();
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+    },
+  });
+}

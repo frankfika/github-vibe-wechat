@@ -1,0 +1,109 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: omniwriter-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      APP_VERSION: ${{ github.sha }}
+      SOURCE_SHA: ${{ github.sha }}
+      IMAGE_REPOSITORY: ${{ secrets.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/omniwriter
+      TCR_REGISTRY: ${{ secrets.TCR_REGISTRY }}
+      TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+      TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$TCR_REGISTRY"
+          test -n "$TCR_USERNAME"
+          test -n "$TCR_PASSWORD"
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_SSH_KEY"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.TCR_REGISTRY }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+
+      - name: Build and push immutable image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+          tags: |
+            ${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Roll out both instances
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          REPOSITORY_URL: https://github.com/${{ github.repository }}.git
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 15m
+          envs: APP_VERSION,SOURCE_SHA,IMAGE_REPOSITORY,TCR_REGISTRY,TCR_USERNAME,TCR_PASSWORD,REPOSITORY_URL
+          script: |
+            set -Eeuo pipefail
+            project_dir=/opt/omniwriter
+            if [ ! -d "$project_dir/.git" ]; then
+              sudo install -d -o "$USER" -g "$USER" "$project_dir"
+              git clone "$REPOSITORY_URL" "$project_dir"
+            fi
+            cd "$project_dir"
+            git fetch --force origin "$SOURCE_SHA"
+            git checkout --detach "$SOURCE_SHA"
+            install -d -m 700 secrets
+            if [ ! -f secrets/anthropic_api_key ]; then
+              install -m 600 /dev/null secrets/anthropic_api_key
+            fi
+            if [ ! -f .env.production ]; then
+              umask 077
+              printf '%s\n' \
+                'ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic' \
+                'ANTHROPIC_MODEL=MiniMax-M2.7' \
+                'FETCH_TIMEOUT_MS=15000' > .env.production
+            fi
+            printf '%s' "$TCR_PASSWORD" | docker login "$TCR_REGISTRY" --username "$TCR_USERNAME" --password-stdin >/dev/null
+            OMNIWRITER_IMAGE_REPOSITORY="$IMAGE_REPOSITORY" \
+              APP_VERSION="$APP_VERSION" \
+              COMPOSE_FILE=compose.production.yaml \
+              ENV_FILE=.env.production \
+              BUILD_IMAGE=0 \
+              PULL_IMAGE=1 \
+              SMOKE_URL=http://127.0.0.1:3080 \
+              ./scripts/deploy-ha.sh
+
+      - name: Deployment summary
+        run: |
+          {
+            printf "### OmniWriter production\n\n"
+            printf -- "- Version: \`%s\`\n" "$APP_VERSION"
+            printf -- "- Image: \`%s:%s\`\n" "$IMAGE_REPOSITORY" "$APP_VERSION"
+          } >> "$GITHUB_STEP_SUMMARY"

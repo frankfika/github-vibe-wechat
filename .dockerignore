@@ -1,0 +1,11 @@
+.git
+.claude
+.next
+node_modules
+*.tsbuildinfo
+.env*
+npm-debug.log*
+pnpm-debug.log*
+README.md
+dev.command
+dev.sh

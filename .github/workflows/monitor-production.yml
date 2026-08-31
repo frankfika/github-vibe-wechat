@@ -1,0 +1,54 @@
+name: Monitor production
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omniwriter-production-monitor
+  cancel-in-progress: true
+
+jobs:
+  health:
+    if: ${{ vars.PRODUCTION_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check HTTPS, both instances, readiness and critical export flow
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          set -Eeuo pipefail
+          case "$PRODUCTION_URL" in
+            https://*) ;;
+            *) printf 'PRODUCTION_URL must use HTTPS\n' >&2; exit 1 ;;
+          esac
+          probe_file="$(mktemp)"
+          for _ in 1 2 3 4 5 6 7 8; do
+            curl --fail --silent --show-error --retry 2 --retry-all-errors --max-time 10 "$PRODUCTION_URL/api/health" >> "$probe_file"
+            printf '\n' >> "$probe_file"
+          done
+          jq -s -e 'length == 8 and all(.status == "ok")' "$probe_file" >/dev/null
+          jq -r '.instance' "$probe_file" | sort -u | grep -qx 'app-a'
+          jq -r '.instance' "$probe_file" | sort -u | grep -qx 'app-b'
+          test "$(jq -r '.version' "$probe_file" | sort -u | wc -l | tr -d ' ')" = "1"
+          if jq -e 'select(.version == "dev" or .version == "")' "$probe_file" >/dev/null; then
+            printf 'production returned an invalid version\n' >&2
+            exit 1
+          fi
+
+          ready="$(curl --fail --silent --show-error --retry 2 --retry-all-errors --max-time 10 "$PRODUCTION_URL/api/ready")"
+          printf '%s' "$ready" | jq -e '.status == "ready" and .checks.capabilities.platforms == 9 and .checks.capabilities.templates >= 7' >/dev/null
+
+          curl --fail --silent --show-error --retry 2 --retry-all-errors --max-time 10 "$PRODUCTION_URL/" >/dev/null
+          curl --fail --silent --show-error --retry 2 --retry-all-errors --max-time 20 \
+            -H 'content-type: application/json' \
+            --data '{"title":"monitor","md":"# Monitor\n\nSynthetic export probe.","templateId":"paper"}' \
+            "$PRODUCTION_URL/api/export" > /tmp/omniwriter-monitor.zip
+          unzip -t /tmp/omniwriter-monitor.zip | grep -q 'No errors detected'
+          unzip -l /tmp/omniwriter-monitor.zip | grep -q 'article.html'
+          unzip -l /tmp/omniwriter-monitor.zip | grep -q 'article.md'
