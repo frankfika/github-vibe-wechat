@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
   const isBareNewsUrl = brief.materialType === 'news' && /^https?:\/\/\S+$/i.test(source.trim());
   const encoder = new TextEncoder();
   let cancelled = false;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -44,6 +45,12 @@ export async function POST(req: NextRequest) {
         if (cancelled) return;
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
+
+      // 心跳注释行：防止中间代理/负载均衡因「长时间无数据」掐断长连接。
+      heartbeat = setInterval(() => {
+        if (cancelled) return;
+        controller.enqueue(encoder.encode(': ping\n\n'));
+      }, 15_000);
 
       void (async () => {
         try {
@@ -91,6 +98,14 @@ export async function POST(req: NextRequest) {
             },
           });
 
+          // 冲刷末段：即使末尾增量不足阈值，也要把最终字数推给客户端。
+          if (md.length - lastSentChars > 0) {
+            send({
+              type: 'delta', requestId, chars: md.length,
+              preview: md.slice(-180).replace(/\s+/g, ' ').trim(), at: Date.now(),
+            });
+          }
+
           send({
             type: 'stage', requestId, stage: 'checking', label: '正文已收到，正在做标题与基础格式检查',
             detail: `${md.length.toLocaleString('zh-CN')} 字`, at: Date.now(),
@@ -102,19 +117,23 @@ export async function POST(req: NextRequest) {
             issues: validateMarkdown(md).length,
             at: Date.now(),
           });
+          if (heartbeat) clearInterval(heartbeat);
           if (!cancelled) controller.close();
         } catch (error) {
+          if (heartbeat) clearInterval(heartbeat);
           if (cancelled) return;
           const message = (error as Error).name === 'AbortError'
             ? '生成已停止，原稿没有被覆盖'
             : (error as Error).message || '生成失败，请重试';
           send({ type: 'error', requestId, message, retryable: true, at: Date.now() });
-          controller.close();
+          // 失败用 controller.error 结束：让客户端读取循环终止，而不是误判为正常结束。
+          try { controller.error(new Error(message)); } catch { controller.close(); }
         }
       })();
     },
     cancel() {
       cancelled = true;
+      if (heartbeat) clearInterval(heartbeat);
     },
   });
 
@@ -123,6 +142,7 @@ export async function POST(req: NextRequest) {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache, no-transform',
       connection: 'keep-alive',
+      'x-accel-buffering': 'no',
     },
   });
 }

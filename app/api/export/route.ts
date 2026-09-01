@@ -3,6 +3,7 @@ import { buildZip } from '@/src/lib/export-zip';
 import { htmlToMarkdown, rewriteImageSrcs } from '@/src/lib/export-html';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 interface ExportImage {
   src: string; // 文章 HTML 里的原始 src
@@ -45,10 +46,12 @@ export async function POST(req: NextRequest) {
     });
     const buf = Buffer.from(await zip.arrayBuffer());
     const name = slug(title || 'article');
+    // filename*（RFC 5987）让中文/非 ASCII 文件名在主流浏览器里正确保存；
+    // 保留 ASCII fallback 兼容旧客户端。
     return new NextResponse(buf, {
       headers: {
         'content-type': 'application/zip',
-        'content-disposition': `attachment; filename="${encodeURIComponent(name)}.zip"`,
+        'content-disposition': `attachment; filename="${name}.zip"; filename*=UTF-8''${encodeURIComponent(name)}.zip`,
       },
     });
   } catch (e) {

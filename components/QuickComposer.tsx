@@ -74,7 +74,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
               void submit();
             }
           }}
-          rows={compact ? 5 : 7}
+          rows={compact ? 3 : 5}
           autoFocus={compact}
           placeholder={'像和编辑说话一样告诉我：素材是什么、想表达什么、准备发到哪里。\n也可以直接粘贴正文、多个网页或 GitHub 链接…'}
           className={cn(

@@ -12,6 +12,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hydrate = useArticleStore((s) => s.hydrate);
   const hydrated = useArticleStore((s) => s.hydrated);
+  const corrupted = useArticleStore((s) => s.corrupted);
+  const discardCorrupt = useArticleStore((s) => s.discardCorrupt);
   const articles = useArticleStore((s) => s.articles);
   const remove = useArticleStore((s) => s.remove);
   const flush = useArticleStore((s) => s.flush);
@@ -40,7 +42,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [flush]);
 
   return (
-    <div className="h-[100dvh] w-full grid grid-rows-1 grid-cols-1 xl:grid-cols-[260px_1fr] overflow-hidden app-workspace-bg">
+    <div className="h-[100dvh] w-full flex flex-col app-workspace-bg">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-ink focus:px-3 focus:py-2 focus:text-sm focus:text-white"
+      >
+        跳到主内容
+      </a>
+      {corrupted && (
+        <div role="alert" className="z-40 shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+          <span>本地文章数据无法解析，为避免覆盖已暂停自动保存。</span>
+          <Link href="/settings" className="font-medium underline underline-offset-2">去 设置 → 数据安全 恢复</Link>
+          <button type="button" onClick={discardCorrupt} className="font-medium underline underline-offset-2">我已确认，丢弃损坏数据</button>
+        </div>
+      )}
+      <div className="min-h-0 flex-1 grid grid-rows-1 grid-cols-1 xl:grid-cols-[260px_1fr] overflow-hidden">
       <aside className="hidden xl:flex border-r border-white/80 bg-white/70 backdrop-blur-xl flex-col shadow-[8px_0_30px_rgba(15,23,42,0.04)]">
         <div className="px-4 h-14 flex items-center border-b border-ink-line/70">
           <span className="mr-2 size-6 rounded-lg bg-gradient-to-br from-slate-900 to-indigo-600 shadow-sm"/>
@@ -96,10 +112,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         if (active) router.push('/');
                       }
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-red-600 opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+                    aria-label={`删除 ${a.title || '未命名'}`}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded text-ink-muted hover:text-red-600 hover:bg-red-50 lg:opacity-0 lg:group-hover:opacity-100"
                     title="删除"
                   >
-                    <Trash2 size={12}/>
+                    <Trash2 size={13}/>
                   </button>
                 </li>
               );
@@ -141,7 +158,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
         </div>
-        <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
+        <main id="main" className="flex-1 min-h-0 overflow-hidden">{children}</main>
+        </div>
       </div>
     </div>
   );

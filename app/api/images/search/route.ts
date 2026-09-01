@@ -89,13 +89,13 @@ export async function POST(req: NextRequest) {
 
   if (sourceUrl) {
     try {
-      const document = await fetchPublicHtml(sourceUrl, { timeoutMs: 15_000, maxBytes: 2_000_000 });
+      const document = await fetchPublicHtml(sourceUrl, { timeoutMs: 15_000, maxBytes: 2_000_000, signal: req.signal });
       pageContext = extractPageContext(document.html, document.finalUrl);
       const candidates = pageContext.candidates
         .filter((candidate) => !looksLikeIcon(candidate))
         .slice(0, MAX_SOURCE_CANDIDATES);
       const probed = await mapWithConcurrency(candidates, 4, async (candidate) => {
-        const probe = await probePublicImage(candidate.imageUrl, { timeoutMs: 10_000, maxImageBytes: 8_000_000 });
+        const probe = await probePublicImage(candidate.imageUrl, { timeoutMs: 10_000, maxImageBytes: 8_000_000, signal: req.signal });
         if (!probe) return null;
         return toResult({
           origin: 'source-page',
@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
       });
       sourceResults.push(...probed.filter((result): result is ImageSearchResult => Boolean(result)));
     } catch (error) {
+      if (req.signal.aborted) throw error;
       warnings.push(`原文图片读取失败：${safeError(error)}`);
     }
   }
@@ -124,8 +125,9 @@ export async function POST(req: NextRequest) {
   let wikimediaResults: ImageSearchResult[] = [];
   if (effectiveQuery && sourceResults.length < limit) {
     try {
-      wikimediaResults = await searchWikimediaWithRetry(effectiveQuery, Math.min(MAX_LIMIT, limit - sourceResults.length + 4));
+      wikimediaResults = await searchWikimediaWithRetry(effectiveQuery, Math.min(MAX_LIMIT, limit - sourceResults.length + 4), req.signal);
     } catch (error) {
+      if (req.signal.aborted) throw error;
       warnings.push(`Wikimedia Commons 搜图失败：${safeError(error)}`);
     }
   }
@@ -151,17 +153,18 @@ export async function POST(req: NextRequest) {
   );
 }
 
-async function searchWikimediaWithRetry(query: string, limit: number): Promise<ImageSearchResult[]> {
+async function searchWikimediaWithRetry(query: string, limit: number, signal?: AbortSignal): Promise<ImageSearchResult[]> {
   try {
-    return await searchWikimedia(query, limit);
-  } catch {
+    return await searchWikimedia(query, limit, signal);
+  } catch (error) {
     // Commons 偶尔会在 IPv4/IPv6 切换时出现一次性网络失败；只重试一次，
-    // 避免把瞬时故障直接呈现成“没有找到图片”。
-    return searchWikimedia(query, limit);
+    // 避免把瞬时故障直接呈现成“没有找到图片”。但请求被取消时直接上抛。
+    if (signal?.aborted) throw error;
+    return searchWikimedia(query, limit, signal);
   }
 }
 
-async function searchWikimedia(query: string, limit: number): Promise<ImageSearchResult[]> {
+async function searchWikimedia(query: string, limit: number, signal?: AbortSignal): Promise<ImageSearchResult[]> {
   const apiUrl = new URL('https://commons.wikimedia.org/w/api.php');
   apiUrl.search = new URLSearchParams({
     action: 'query',
@@ -180,6 +183,7 @@ async function searchWikimedia(query: string, limit: number): Promise<ImageSearc
     timeoutMs: 15_000,
     maxBytes: 2_000_000,
     headers: { accept: 'application/json' },
+    signal,
   });
   const payload = JSON.parse(new TextDecoder().decode(resource.bytes)) as { query?: { pages?: WikimediaPage[] } };
   const pages = [...(payload.query?.pages ?? [])].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));

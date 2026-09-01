@@ -3,16 +3,38 @@ import type { Article, Brief, PlatformId } from './types';
 import { loadConfig } from './config';
 import { mergeArticles } from './backup';
 
-const STORAGE_KEY = 'pencil:articles:v1';
+const STORAGE_KEY = 'omniwriter:articles:v1';
+const LEGACY_STORAGE_KEYS = ['pencil:articles:v1'];
 const SAVE_DEBOUNCE_MS = 400;
+
+// 损坏数据保护：若 localStorage 里的文章 JSON 无法解析，保留原始字符串，
+// 并暂停自动覆盖——避免下一次防抖落盘把用户全部稿件静默清空。
+let corruptRaw: string | null = null;
+
+function migrateStorage() {
+  if (typeof window === 'undefined') return;
+  if (window.localStorage.getItem(STORAGE_KEY) !== null) return;
+  for (const legacy of LEGACY_STORAGE_KEYS) {
+    const value = window.localStorage.getItem(legacy);
+    if (value !== null) {
+      window.localStorage.setItem(STORAGE_KEY, value);
+      window.localStorage.removeItem(legacy);
+      break;
+    }
+  }
+}
 
 function loadAll(): Article[] {
   if (typeof window === 'undefined') return [];
+  migrateStorage();
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as Article[];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Article[]) : [];
   } catch {
+    corruptRaw = raw;
+    console.warn('[OmniWriter] 本地文章数据损坏，已暂停自动保存以防覆盖，请到 设置 → 数据安全 恢复或导出备份。');
     return [];
   }
 }
@@ -21,6 +43,11 @@ function loadAll(): Article[] {
 // 控制台给出提示，避免整篇文章丢失 / 编辑器崩溃。
 function saveAll(articles: Article[]): boolean {
   if (typeof window === 'undefined') return true;
+  if (corruptRaw !== null) {
+    // 用户尚未确认丢弃损坏数据前，绝不覆盖原始串。
+    console.warn('[OmniWriter] 本地数据损坏，跳过覆盖写以保留原始数据。');
+    return false;
+  }
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(articles));
     return true;
@@ -79,9 +106,11 @@ function uid(): string {
 interface Store {
   articles: Article[];
   hydrated: boolean;
+  corrupted: boolean;
   saveState: 'saved' | 'saving' | 'error';
   hydrate: () => void;
   flush: () => boolean;
+  discardCorrupt: () => void;
   create: (brief: Brief) => Article;
   get: (id: string) => Article | undefined;
   update: (id: string, patch: Partial<Article>) => void;
@@ -94,10 +123,18 @@ interface Store {
 export const useArticleStore = create<Store>((set, get) => ({
   articles: [],
   hydrated: false,
+  corrupted: false,
   saveState: 'saved',
   hydrate: () => {
     if (get().hydrated) return;
-    set({ articles: loadAll(), hydrated: true });
+    const articles = loadAll();
+    set({ articles, hydrated: true, corrupted: corruptRaw !== null });
+  },
+  // 用户明确选择丢弃损坏数据后再恢复正常写盘。
+  discardCorrupt: () => {
+    corruptRaw = null;
+    const ok = saveAll(get().articles);
+    set({ corrupted: false, saveState: ok ? 'saved' : 'error' });
   },
   flush: () => flushPendingSave(),
   create: (brief) => {
@@ -143,9 +180,11 @@ export const useArticleStore = create<Store>((set, get) => ({
   restore: (incoming) => {
     flushPendingSave();
     cancelPendingSave();
+    // 从备份恢复是一次显式恢复动作：如果之前数据损坏，恢复后清掉损坏保护。
+    corruptRaw = null;
     const articles = mergeArticles(get().articles, incoming);
     const saved = saveAll(articles);
-    set({ articles, saveState: saved ? 'saved' : 'error' });
+    set({ articles, corrupted: false, saveState: saved ? 'saved' : 'error' });
     return { total: articles.length, saved };
   },
 }));

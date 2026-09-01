@@ -80,27 +80,6 @@ ${STYLE_GUIDE}
 - 不生成图片占位符、虚构图片路径或 dataURL；真实配图由用户在编辑器中插入。
 - 文末附"## 来源链接"列表（新闻类）。`;
 
-export async function generateMaster(
-  brief: Brief,
-  material: string,
-  directive?: string,
-  ai?: AiLike,
-  opts: { seriesTitle?: string } = {},
-): Promise<string> {
-  const user = buildUserPrompt(brief, material, opts.seriesTitle);
-  const system = directive
-    ? `${MASTER_SYSTEM}\n\n## 本 Agent 写作指令\n${directive}`
-    : MASTER_SYSTEM;
-  const msg = await getClient(ai).messages.create({
-    model: resolveModel(ai),
-    max_tokens: brief.length === 'short' ? 1500 : brief.length === 'long' ? 4500 : 3000,
-    system,
-    messages: [{ role: 'user', content: user }],
-  });
-  return ensureBilingualMaster(brief, extractText(msg), ai);
-}
-
-// 流式母稿生成：只把模型实际返回的正文增量交给 UI，不暴露提示词或隐藏推理。
 export async function generateMasterStream(
   brief: Brief,
   material: string,
@@ -295,7 +274,15 @@ function enforcePlatformLimits(text: string, platform: PlatformId, bilingual: bo
   if (!separator || separator.index === undefined) return clampPlatformText(text, maxChars);
   const zh = text.slice(0, separator.index);
   const en = text.slice(separator.index + separator[0].length);
-  return `${clampPlatformText(zh, maxChars)}\n\n## English Version\n\n${clampPlatformText(en, maxChars)}`;
+  const zhLen = Array.from(zh).length;
+  const enLen = Array.from(en).length;
+  // 双语总长必须压在该平台上限内（X 硬上限 280，本仓库 maxChars=240），
+  // 而不是中英文各自各自拿到整个上限——否则双语稿会超过平台硬限制。
+  const total = zhLen + enLen;
+  if (total <= maxChars) return text.trim();
+  const zhBudget = Math.max(1, Math.floor((zhLen / total) * maxChars));
+  const enBudget = Math.max(1, maxChars - zhBudget);
+  return `${clampPlatformText(zh, zhBudget)}\n\n## English Version\n\n${clampPlatformText(en, enBudget)}`;
 }
 
 function clampPlatformText(value: string, maxChars: number): string {

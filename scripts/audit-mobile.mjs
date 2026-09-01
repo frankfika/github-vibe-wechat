@@ -46,7 +46,7 @@ const context = await browser.newContext({
   permissions: ['clipboard-read', 'clipboard-write'],
 });
 await context.addInitScript(({ value }) => {
-  localStorage.setItem('pencil:articles:v1', JSON.stringify([value]));
+  localStorage.setItem('omniwriter:articles:v1', JSON.stringify([value]));
 }, { value: article });
 const page = await context.newPage();
 const interactions = { conversationCommands: [], agentCommands: [], templates: [], templateHeadings: {}, platformPreviews: [], platformCopies: [], platformImages: [], platformInlineImages: [], wechatImageCopy: null };
@@ -56,12 +56,22 @@ function ensure(condition, message) {
 }
 
 async function audit(name) {
+  // 等响应式样式真正应用再量尺寸：页面刚加载时 sr-only 的 clip 和 xl: 断点可能还没生效，
+  // 会让桌面侧栏与移动顶栏同时"可见"、把 sr-only 链接算成控件，从而误报 undersized。
+  await page.waitForFunction(() => {
+    const skip = document.querySelector('a[href="#main"]');
+    if (!skip) return false;
+    const clip = getComputedStyle(skip).clip || '';
+    return /rect\(0(?:px)?, ?0(?:px)?, ?0(?:px)?, ?0(?:px)?\)/.test(clip);
+  }, null, { timeout: 10_000 }).catch(() => {});
   await page.waitForTimeout(250);
   const metrics = await page.evaluate(() => {
     const visible = (element) => {
       const style = getComputedStyle(element);
       const rect = element.getBoundingClientRect();
-      return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
+      // sr-only 用 clip 裁剪成 1px 供屏幕阅读器使用，视觉上不可见，不算可点击控件。
+      const clipped = /rect\(0(?:px)?, ?0(?:px)?, ?0(?:px)?, ?0(?:px)?\)/.test(style.clip || '');
+      return !clipped && style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
     };
     const controls = [...document.querySelectorAll('button, a[href], input, textarea, select, [role="tab"]')]
       .filter(visible)

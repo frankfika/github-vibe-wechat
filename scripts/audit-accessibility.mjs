@@ -29,7 +29,7 @@ const article = {
 
 const browser = await chromium.launch({ headless: true, executablePath });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-await context.addInitScript(({ value }) => localStorage.setItem('pencil:articles:v1', JSON.stringify([value])), { value: article });
+await context.addInitScript(({ value }) => localStorage.setItem('omniwriter:articles:v1', JSON.stringify([value])), { value: article });
 const page = await context.newPage();
 const results = [];
 

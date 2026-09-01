@@ -15,16 +15,33 @@ export function LanguageTabs({
   hasEnglish: boolean;
   compact?: boolean;
 }) {
+  // 标签组键盘导航：←/→ 在中文/English 之间移动焦点（WAI-ARIA Tabs 模式）。
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return;
+    const buttons = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button[role="tab"]'));
+    if (!buttons.length) return;
+    const last = buttons.length - 1;
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    let next = -1;
+    if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = last;
+    else if (event.key === 'ArrowRight') next = current === -1 ? 0 : current === last ? 0 : current + 1;
+    else next = current === -1 ? last : current === 0 ? last : current - 1;
+    event.preventDefault();
+    buttons[next].focus();
+  };
+
   return (
     <div
       className="inline-flex shrink-0 items-center rounded-xl border border-[#e4e7f1] bg-[#f3f5fb] p-1"
       role="tablist"
       aria-label="稿件语言"
+      onKeyDown={onKeyDown}
     >
-      <LanguageTab active={value === 'zh'} compact={compact} onClick={() => onChange('zh')}>
+      <LanguageTab active={value === 'zh'} compact={compact} tabIndex={value === 'zh' ? 0 : -1} onClick={() => onChange('zh')}>
         中文
       </LanguageTab>
-      <LanguageTab active={value === 'en'} compact={compact} onClick={() => onChange('en')}>
+      <LanguageTab active={value === 'en'} compact={compact} tabIndex={value === 'en' ? 0 : -1} onClick={() => onChange('en')}>
         English
         {!hasEnglish && <span className="ml-1 text-[9px] font-normal opacity-60">待生成</span>}
       </LanguageTab>
@@ -35,11 +52,13 @@ export function LanguageTabs({
 function LanguageTab({
   active,
   compact,
+  tabIndex,
   onClick,
   children,
 }: {
   active: boolean;
   compact: boolean;
+  tabIndex: number;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -48,6 +67,7 @@ function LanguageTab({
       type="button"
       role="tab"
       aria-selected={active}
+      tabIndex={tabIndex}
       onClick={onClick}
       className={cn(
         'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200',

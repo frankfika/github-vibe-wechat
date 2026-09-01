@@ -62,6 +62,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   const autoGenerateStarted = React.useRef(false);
   const platformBatchController = React.useRef<AbortController | null>(null);
   const platformBatchRunId = React.useRef(0);
+  const refineController = React.useRef<AbortController | null>(null);
   const [adapting, setAdapting] = React.useState<PlatformId | null>(null);
   const [batchProgress, setBatchProgress] = React.useState<{ done: number; total: number } | null>(null);
   // 所有尺寸都按阶段一次只显示一个主任务，避免素材、编辑、预览、平台稿同时堆叠。
@@ -84,6 +85,29 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, []);
 
+  // 标签组键盘导航：←/→ 与 Home/End 在按钮间移动焦点（WAI-ARIA Tabs 模式）。
+  const onTabsKeyDown = React.useCallback((
+    event: React.KeyboardEvent<HTMLDivElement>,
+    buttons: Array<{ key: string; enabled: boolean }>,
+    onSelect: (key: string) => void,
+  ) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return;
+    const targets = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button[role="tab"]'))
+      .filter((button) => !button.disabled);
+    if (!targets.length) return;
+    const current = targets.indexOf(document.activeElement as HTMLButtonElement);
+    const last = targets.length - 1;
+    let next = -1;
+    if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = last;
+    else if (event.key === 'ArrowRight') next = current === -1 ? 0 : current === last ? 0 : current + 1;
+    else next = current === -1 ? last : current === 0 ? last : current - 1;
+    event.preventDefault();
+    const target = targets[next];
+    const item = buttons[next];
+    if (item?.enabled) target.focus();
+  }, []);
+
   React.useEffect(() => {
     if (!article || language === 'zh') return;
     const parts = splitBilingualContent(article.content);
@@ -93,6 +117,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   React.useEffect(() => () => {
     generationController.current?.abort();
     platformBatchController.current?.abort();
+    refineController.current?.abort();
     platformBatchRunId.current += 1;
   }, []);
 
@@ -169,14 +194,12 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     master,
     wechatDraft,
     platforms,
-    clearExisting,
     revealPublish,
   }: {
     brief: Brief;
     master: string;
     wechatDraft: string;
     platforms: PlatformId[];
-    clearExisting: boolean;
     revealPublish: boolean;
   }) => {
     const targets = Array.from(new Set(platforms));
@@ -193,7 +216,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       selectWorkspaceStep('publish');
       setPublishView('platforms');
     }
-    if (clearExisting) targets.forEach((platform) => setDraft(article.id, platform, ''));
+    // 注意：不预先清空已有平台稿。生成成功后才用 setDraft 覆盖；
+    // 若中途失败或取消，旧稿仍保留，避免批量生成失败导致内容丢失。
     setAdapting(null);
     setBatchProgress({ done: 0, total: targets.length });
 
@@ -291,6 +315,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       let buffer = '';
       let completed = false;
       const applyEvent = (event: GenerationStreamEvent) => {
+        // 只接受本请求的 SSE 事件：拒绝迟到/串流的旧请求（重启或上一轮 done 的残余），
+        // 避免旧事件把刚开始的生成进度或正文覆盖掉。
+        if (event.requestId && event.requestId !== localRequestId) return;
         if (event.type === 'stage') {
           setGenerationProgress((previous) => ({
             requestId: event.requestId,
@@ -349,7 +376,6 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           master: generatedMaster,
           wechatDraft: generatedMaster,
           platforms: briefSnapshot.platforms,
-          clearExisting: true,
           revealPublish: false,
         });
       }
@@ -435,7 +461,6 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       master,
       wechatDraft: master,
       platforms,
-      clearExisting: missing.length === 0,
       revealPublish: true,
     });
   };
@@ -499,6 +524,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         }
         const sources = await fetchMaterialSources(urls);
         const fetched = sources.filter((source) => Boolean(source.text)).length;
+        if (fetched === 0) {
+          throw new Error(`链接读取失败，没有取到任何正文（共 ${urls.length} 个）。请确认链接可访问后重试。`);
+        }
         const fetchedMaterial = composeFetchedMaterial(commandUrls.length ? originalInstruction : article.brief.material, urls, sources);
         onBrief({
           ...article.brief,
@@ -580,7 +608,6 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           master: htmlToMarkdown(article.content),
           wechatDraft: htmlToMarkdown(article.content),
           platforms: targets,
-          clearExisting: true,
           revealPublish: true,
         });
         addConversationMessage('assistant', `已生成${targets.map((platform) => PLATFORMS[platform].label).join('、')}发布稿，并打开发布包。`, agentId);
@@ -597,18 +624,37 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       }
 
       if (aiReady === false) throw new Error('连接 AI 后才能继续改稿；原稿仍可手动编辑。');
-      const res = await fetch('/api/refine', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          brief: article.brief,
-          master: article.content,
-          instruction,
-          ai: loadAiConfig(),
-        }),
-      });
-      const payload = await res.json().catch(() => ({})) as { md?: string; title?: string; error?: string };
-      if (!res.ok || !payload.md?.trim()) throw new Error(payload.error || '这次修改没有返回完整稿件');
+      const refineAbort = new AbortController();
+      refineController.current = refineAbort;
+      let refineTimedOut = false;
+      const refineTimer = window.setTimeout(() => {
+        refineTimedOut = true;
+        refineAbort.abort();
+      }, 90_000);
+      let payload: { md?: string; title?: string; error?: string };
+      try {
+        const res = await fetch('/api/refine', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          signal: refineAbort.signal,
+          body: JSON.stringify({
+            brief: article.brief,
+            master: article.content,
+            instruction,
+            ai: loadAiConfig(),
+          }),
+        });
+        payload = (await res.json().catch(() => ({}))) as { md?: string; title?: string; error?: string };
+        if (!res.ok || !payload.md?.trim()) throw new Error(payload.error || '这次修改没有返回完整稿件');
+      } finally {
+        window.clearTimeout(refineTimer);
+        if (refineController.current === refineAbort) refineController.current = null;
+      }
+      // 超时或已被更新的操作取代时，不要覆盖当前正文。
+      if (refineAbort.signal.aborted) {
+        throw new Error(refineTimedOut ? '改稿超过 90 秒，请稍后重试' : '改稿已停止，原稿没有变化');
+      }
+      if (refineController.current !== null) throw new Error('有新的改稿请求正在处理，本次结果已忽略');
       setContent(article.id, markdownToInlineHtml(payload.md));
       if (payload.title) onTitle(payload.title);
       setLanguage('zh');
@@ -628,7 +674,6 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           master: payload.md,
           wechatDraft: payload.md,
           platforms: existingPlatforms,
-          clearExisting: true,
           revealPublish: false,
         });
       }
@@ -731,7 +776,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           />
         ) : (
           <Editor
-            key={language}
+            key={article.id}
             html={selectedContent}
             onChange={updateSelectedContent}
             onFindImages={() => setEditorView('images')}
@@ -747,10 +792,15 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       <ValidationStrip markdown={selectedContent} title={renderedTitle} />
       <div className="min-h-12 shrink-0 border-b border-ink-line px-4 py-1 flex items-center justify-between bg-white">
         <div className="text-sm font-semibold">发布准备</div>
-        <div className="rounded-lg bg-ink-panel p-0.5 flex" role="tablist" aria-label="发布内容">
+        <div className="rounded-lg bg-ink-panel p-0.5 flex" role="tablist" aria-label="发布内容"
+          onKeyDown={(event) => onTabsKeyDown(event, [
+            { key: 'preview', enabled: true },
+            { key: 'platforms', enabled: true },
+          ], (key) => setPublishView(key as 'preview' | 'platforms'))}>
           <button
             role="tab"
             aria-selected={publishView === 'preview'}
+            tabIndex={publishView === 'preview' ? 0 : -1}
             onClick={() => setPublishView('preview')}
             className={cn('h-10 px-3 rounded-md text-sm sm:h-7 sm:text-xs', publishView === 'preview' ? 'bg-white shadow-sm text-ink' : 'text-ink-muted')}
           >
@@ -759,6 +809,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           <button
             role="tab"
             aria-selected={publishView === 'platforms'}
+            tabIndex={publishView === 'platforms' ? 0 : -1}
             onClick={() => setPublishView('platforms')}
             className={cn('h-10 px-3 rounded-md text-sm sm:h-7 sm:text-xs', publishView === 'platforms' ? 'bg-white shadow-sm text-ink' : 'text-ink-muted')}
           >
@@ -820,7 +871,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
               </div>
               <p className="hidden truncate text-[10px] text-ink-muted sm:block">{generating ? 'AI 正在生成母稿' : batchProgress ? `正在同步平台稿 ${batchProgress.done}/${batchProgress.total}` : commandBusy ? 'AI 正在执行本轮修改' : '继续在下方对话，不必重新走流程'}</p>
             </div>
-            <div className="flex rounded-lg bg-ink-panel p-0.5" role="tablist" aria-label="创作成果">
+            <div className="flex rounded-lg bg-ink-panel p-0.5" role="tablist" aria-label="创作成果"
+              onKeyDown={(event) => onTabsKeyDown(event, workspaceViews.map((view) => ({ key: view.key, enabled: view.enabled && !generating })), (key) => selectWorkspaceStep(key as WorkspaceStep))}>
               {workspaceViews.map((view) => {
                 const Icon = view.icon;
                 const active = mobileTab === view.key && !generating;
@@ -829,6 +881,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
                     key={view.key}
                     role="tab"
                     aria-selected={active}
+                    tabIndex={active ? 0 : -1}
                     disabled={!view.enabled || generating}
                     onClick={() => selectWorkspaceStep(view.key)}
                     className={cn(

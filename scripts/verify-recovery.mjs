@@ -50,12 +50,14 @@ const page = await context.newPage();
 
 await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
 await page.evaluate(({ seededArticle, seededConfig, marker }) => {
-  localStorage.setItem('pencil:articles:v1', JSON.stringify([seededArticle]));
-  localStorage.setItem('pencil:config:v1', JSON.stringify(seededConfig));
+  localStorage.setItem('omniwriter:articles:v1', JSON.stringify([seededArticle]));
+  localStorage.setItem('omniwriter:config:v1', JSON.stringify(seededConfig));
   localStorage.setItem('omniwriter:ai:v1', JSON.stringify({ apiKey: marker, baseUrl: 'https://example.invalid', model: 'test' }));
 }, { seededArticle: article, seededConfig: config, marker: secretMarker });
 
 await page.goto(`${baseUrl}/settings`, { waitUntil: 'domcontentloaded' });
+// 等首帧与 store 水合稳定后再点标签，避免竞态导致面板未切换。
+await page.waitForTimeout(1500);
 await page.getByRole('tab', { name: '数据安全' }).click();
 await page.getByText('当前浏览器保存了 1 篇文章').waitFor();
 const downloadPromise = page.waitForEvent('download');
@@ -72,14 +74,15 @@ ensure(!backupRaw.includes(secretMarker) && !backupRaw.includes('apiKey'), 'back
 
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(1500);
 await page.getByRole('tab', { name: '数据安全' }).click();
 await page.getByText('当前浏览器保存了 0 篇文章').waitFor();
 await page.getByLabel('选择 OmniWriter 备份文件').setInputFiles(backupPath);
 await page.getByText(/恢复完成：当前共 1 篇文章/).waitFor();
 await page.screenshot({ path: path.join(outputDir, `ux-data-recovery-success-${recoveryLabel}.png`), fullPage: true });
 const restored = await page.evaluate(() => ({
-  articles: JSON.parse(localStorage.getItem('pencil:articles:v1') || '[]'),
-  config: JSON.parse(localStorage.getItem('pencil:config:v1') || '{}'),
+  articles: JSON.parse(localStorage.getItem('omniwriter:articles:v1') || '[]'),
+  config: JSON.parse(localStorage.getItem('omniwriter:config:v1') || '{}'),
   ai: localStorage.getItem('omniwriter:ai:v1'),
 }));
 ensure(restored.articles[0]?.title === article.title, 'restored article content mismatch');
@@ -91,7 +94,7 @@ quotaBackup.articles.push({ ...article, id: 'quota-failure-audit', title: '容�
 await page.evaluate(() => {
   const original = Storage.prototype.setItem;
   Storage.prototype.setItem = function setItem(key, value) {
-    if (key === 'pencil:articles:v1') throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    if (key === 'omniwriter:articles:v1') throw new DOMException('Quota exceeded', 'QuotaExceededError');
     return original.call(this, key, value);
   };
 });
@@ -102,6 +105,7 @@ await page.getByLabel('选择 OmniWriter 备份文件').setInputFiles({
 });
 await page.getByText(/浏览器存储空间不足/).waitFor();
 await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(1500);
 await page.getByRole('tab', { name: '数据安全' }).click();
 await page.getByText('当前浏览器保存了 1 篇文章').waitFor();
 
@@ -114,7 +118,7 @@ await page.getByLabel('选择 OmniWriter 备份文件').setInputFiles({
   buffer: Buffer.from(JSON.stringify(staleBackup)),
 });
 await page.getByText(/恢复完成：当前共 1 篇文章/).waitFor();
-const titleAfterMerge = await page.evaluate(() => JSON.parse(localStorage.getItem('pencil:articles:v1') || '[]')[0]?.title);
+const titleAfterMerge = await page.evaluate(() => JSON.parse(localStorage.getItem('omniwriter:articles:v1') || '[]')[0]?.title);
 ensure(titleAfterMerge === article.title, 'an older backup overwrote the newer article');
 
 await page.getByLabel('选择 OmniWriter 备份文件').setInputFiles({
@@ -126,20 +130,31 @@ await page.getByText('不是受支持的 OmniWriter 备份文件').waitFor();
 await page.screenshot({ path: path.join(outputDir, `ux-data-recovery-${recoveryLabel}.png`), fullPage: true });
 
 // 在线访问并让 Service Worker 接管、缓存文章页，然后模拟断网刷新与编辑。
+// 注意：开发模式（next dev）会主动注销 SW（见 AvailabilityStatus.tsx），
+// 离线分支只在生产构建下有意义；未注册 SW 时跳过并说明，避免挂死。
 await page.goto(`${baseUrl}/article/${articleId}?step=editor`, { waitUntil: 'domcontentloaded' });
-await page.evaluate(() => navigator.serviceWorker.ready);
-await page.reload({ waitUntil: 'domcontentloaded' });
-await page.getByPlaceholder('中文标题').waitFor();
-await context.setOffline(true);
-await page.reload({ waitUntil: 'domcontentloaded' });
-const offlineTitle = page.getByPlaceholder('中文标题');
-await offlineTitle.waitFor();
-await offlineTitle.fill('离线恢复验证稿');
-await page.waitForTimeout(600);
-ensure((await offlineTitle.inputValue()) === '离线恢复验证稿', 'offline editing did not accept input');
-await context.setOffline(false);
-await page.reload({ waitUntil: 'domcontentloaded' });
-ensure((await page.getByPlaceholder('中文标题').inputValue()) === '离线恢复验证稿', 'offline edit was not persisted');
+const swRegistered = await page.evaluate(async () => {
+  if (!('serviceWorker' in navigator)) return false;
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  return registrations.some((r) => r.active || r.installing || r.waiting);
+});
+if (!swRegistered) {
+  console.log('SKIP offline/SW checks: no service worker registered (dev mode). Run against a production build to exercise offline editing.');
+} else {
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('中文标题').waitFor();
+  await context.setOffline(true);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const offlineTitle = page.getByPlaceholder('中文标题');
+  await offlineTitle.waitFor();
+  await offlineTitle.fill('离线恢复验证稿');
+  await page.waitForTimeout(600);
+  ensure((await offlineTitle.inputValue()) === '离线恢复验证稿', 'offline editing did not accept input');
+  await context.setOffline(false);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  ensure((await page.getByPlaceholder('中文标题').inputValue()) === '离线恢复验证稿', 'offline edit was not persisted');
+}
 
 await browser.close();
 console.log(JSON.stringify({
@@ -151,7 +166,7 @@ console.log(JSON.stringify({
     reportedQuotaFailure: true,
     protectedNewerDraft: true,
     rejectedInvalidBackup: true,
-    offlineReloadAndEdit: true,
+    offlineReloadAndEdit: swRegistered,
   },
   backupPath,
   screenshot: path.join(outputDir, `ux-data-recovery-${recoveryLabel}.png`),

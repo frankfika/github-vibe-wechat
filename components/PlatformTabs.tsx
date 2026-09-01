@@ -240,11 +240,26 @@ function PlatformBody({
         <LanguageTabs value={language} onChange={onLanguageChange} hasEnglish={parts.hasEnglish} compact/>
       )}
       <div className="flex items-center gap-2">
-        <div role="tablist" aria-label={`${spec.label}文案视图`} className="inline-flex rounded-md border border-ink-line bg-ink-panel/60 p-0.5">
+        <div role="tablist" aria-label={`${spec.label}文案视图`} className="inline-flex rounded-md border border-ink-line bg-ink-panel/60 p-0.5"
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return;
+            const buttons = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button[role="tab"]'));
+            if (!buttons.length) return;
+            const last = buttons.length - 1;
+            const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+            let next = -1;
+            if (event.key === 'Home') next = 0;
+            else if (event.key === 'End') next = last;
+            else if (event.key === 'ArrowRight') next = current === -1 ? 0 : current === last ? 0 : current + 1;
+            else next = current === -1 ? last : current === 0 ? last : current - 1;
+            event.preventDefault();
+            buttons[next].focus();
+          }}>
           <button
             type="button"
             role="tab"
             aria-selected={viewMode === 'preview'}
+            tabIndex={viewMode === 'preview' ? 0 : -1}
             onClick={() => setViewMode('preview')}
             className={`h-10 rounded px-3 text-xs inline-flex items-center gap-1.5 sm:h-7 ${viewMode === 'preview' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`}
           ><Eye size={12}/>成稿预览</button>
@@ -252,6 +267,7 @@ function PlatformBody({
             type="button"
             role="tab"
             aria-selected={viewMode === 'edit'}
+            tabIndex={viewMode === 'edit' ? 0 : -1}
             onClick={() => setViewMode('edit')}
             className={`h-10 rounded px-3 text-xs inline-flex items-center gap-1.5 sm:h-7 ${viewMode === 'edit' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`}
           ><PencilLine size={12}/>编辑文案</button>

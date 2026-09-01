@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text });
   } catch (e) {
     if ((e as Error).name === 'AbortError') {
-      return NextResponse.json({ error: '平台稿生成已取消' }, { status: 499 });
+      return NextResponse.json({ error: '平台稿生成已取消' }, { status: 504 });
     }
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

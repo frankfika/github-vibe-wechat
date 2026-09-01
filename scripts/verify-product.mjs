@@ -69,7 +69,7 @@ const brief = {
   materialType: "topic",
   material: "OmniWriter 是一个本地优先的多平台写作工具。用户给出素材和判断，AI 生成母稿，再适配公众号、X、知乎、小红书、B站、CSDN、Reddit、Hacker News、Product Hunt。文章保存在浏览器，可导出 HTML、Markdown、图片和 ZIP。",
   angle: "AI 应该替人处理重复改写，但不能替人做判断。",
-  voice: "natural",
+  voice: "relaxed",
   length: "short",
   platforms: ["wechat", "x", "zhihu", "xiaohongshu", "bilibili", "csdn", "reddit", "hacker-news", "product-hunt"],
   bilingual: true,

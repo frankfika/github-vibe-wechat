@@ -1,7 +1,8 @@
 import { setDefaultResultOrder } from 'node:dns';
 import { lookup } from 'node:dns/promises';
+import type { LookupFunction } from 'node:net';
 import { BlockList, isIP } from 'node:net';
-import { EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
+import { Agent, EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
 
 // 服务端公网资源抓取：所有网页、图片与第三方 API 都复用同一套协议、DNS、
 // 重定向、超时和响应体大小限制，避免任一新接口绕开 SSRF 边界。
@@ -12,7 +13,27 @@ const SAFE_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'imag
 const hasProxyEnvironment = Boolean(
   process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy,
 );
-const publicDispatcher = hasProxyEnvironment ? new EnvHttpProxyAgent() : undefined;
+
+// 通过代理时 DNS 由代理端解析，无法在连接时 pin；此时依赖 assertPublicUrl 的预校验。
+// 直连时用自定义 lookup 把解析结果再过滤一遍 blocklist，消除 DNS rebinding 竞态：
+// 校验时解析到公网、连接时又被解析回内网的二义地址无法建立连接。
+const validatedLookup: LookupFunction = (hostname, options, callback) => {
+  lookup(hostname, { all: true })
+    .then((addresses) => {
+      const safe = addresses.filter(({ address }) => !isPrivateAddress(address));
+      if (!safe.length) {
+        callback(new Error('不允许读取内网或保留地址'), '', 4);
+        return;
+      }
+      // 直接返回全部已通过校验的地址；Node 会按序尝试，不会重解析。
+      callback(null, safe.map(({ address, family }) => ({ address, family })), 4);
+    })
+    .catch((err: Error) => callback(err, '', 4));
+};
+
+const publicDispatcher = hasProxyEnvironment
+  ? new EnvHttpProxyAgent()
+  : new Agent({ connect: { lookup: validatedLookup } });
 
 // 本机 IPv6 出口并不稳定；优先可达的 IPv4，仍在发出请求前校验 DNS 返回的
 // 全部 IPv4/IPv6 地址，安全边界不因此缩小。
@@ -77,11 +98,16 @@ export async function fetchPublicResponse(
     maxRedirects?: number;
     maxDeclaredBytes?: number;
     headers?: Record<string, string>;
+    signal?: AbortSignal;
   } = {},
 ): Promise<PublicResponse> {
   const timeoutMs = options.timeoutMs ?? 15_000;
   const maxRedirects = options.maxRedirects ?? 5;
   let current = parsePublicUrl(rawUrl);
+  // 请求自身的取消信号（客户端离开/中止）与内部超时合并：任一触发即终止。
+  const abort = options.signal
+    ? AbortSignal.any([options.signal, AbortSignal.timeout(timeoutMs)])
+    : AbortSignal.timeout(timeoutMs);
 
   for (let redirects = 0; redirects <= maxRedirects; redirects += 1) {
     await assertPublicUrl(current);
@@ -91,7 +117,7 @@ export async function fetchPublicResponse(
         ...options.headers,
       },
       redirect: 'manual',
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: abort,
       dispatcher: publicDispatcher,
     }) as unknown as Response;
 
@@ -120,12 +146,14 @@ export async function fetchPublicBytes(
     timeoutMs?: number;
     maxBytes: number;
     headers?: Record<string, string>;
+    signal?: AbortSignal;
   },
 ): Promise<PublicBytes> {
   const { response, finalUrl } = await fetchPublicResponse(rawUrl, {
     timeoutMs: options.timeoutMs,
     maxDeclaredBytes: options.maxBytes,
     headers: options.headers,
+    signal: options.signal,
   });
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
@@ -141,12 +169,13 @@ export async function fetchPublicBytes(
 
 export async function fetchPublicHtml(
   rawUrl: string | URL,
-  options: { timeoutMs?: number; maxBytes?: number } = {},
+  options: { timeoutMs?: number; maxBytes?: number; signal?: AbortSignal } = {},
 ): Promise<PublicHtmlDocument> {
   const resource = await fetchPublicBytes(rawUrl, {
     timeoutMs: options.timeoutMs,
     maxBytes: options.maxBytes ?? 2_000_000,
     headers: { accept: 'text/html,application/xhtml+xml,text/plain;q=0.8' },
+    signal: options.signal,
   });
   const allowed = new Set(['text/html', 'application/xhtml+xml', 'text/plain']);
   if (resource.contentType && !allowed.has(resource.contentType)) throw new Error('链接返回的不是网页正文');
@@ -159,7 +188,7 @@ export async function fetchPublicHtml(
 
 export async function probePublicImage(
   rawUrl: string | URL,
-  options: { timeoutMs?: number; maxImageBytes?: number } = {},
+  options: { timeoutMs?: number; maxImageBytes?: number; signal?: AbortSignal } = {},
 ): Promise<ImageProbe | null> {
   const maxImageBytes = options.maxImageBytes ?? 8_000_000;
   try {
@@ -170,6 +199,7 @@ export async function probePublicImage(
         accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9',
         range: 'bytes=0-65535',
       },
+      signal: options.signal,
     });
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
@@ -316,9 +346,12 @@ export async function assertPublicUrl(url: URL): Promise<void> {
 
 export function isPrivateAddress(address: string): boolean {
   const normalized = address.toLowerCase().split('%')[0];
-  const family = isIP(normalized);
-  if (family === 4) return blockedAddresses.check(normalized, 'ipv4');
-  if (family === 6) return blockedAddresses.check(normalized, 'ipv6');
+  // IPv4-mapped IPv6（::ffff:1.2.3.4）归一化为 IPv4 再校验，避免绕过 IPv4 blocklist。
+  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  const target = mapped ? mapped[1] : normalized;
+  const family = isIP(target);
+  if (family === 4) return blockedAddresses.check(target, 'ipv4');
+  if (family === 6) return blockedAddresses.check(target, 'ipv6');
   return true;
 }
 

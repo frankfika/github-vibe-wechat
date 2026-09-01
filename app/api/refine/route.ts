@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ md, title });
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
-      return NextResponse.json({ error: '本轮修改已取消' }, { status: 499 });
+      return NextResponse.json({ error: '本轮修改已取消' }, { status: 504 });
     }
     return NextResponse.json({ error: (error as Error).message || '修改失败' }, { status: 500 });
   }
