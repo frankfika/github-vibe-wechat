@@ -2,8 +2,11 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowUp, Github, Link2, Loader2, Sparkles } from 'lucide-react';
+import { ArrowUp, ChevronDown, Github, Link2, Loader2, Palette, Sparkles } from 'lucide-react';
 import { AGENTS, mergeBrief } from '@/src/lib/agents';
+import { WRITING_STYLES } from '@/src/lib/styles';
+import { WECHAT_TEMPLATES } from '@/src/lib/templates';
+import type { Voice } from '@/src/lib/types';
 import { useArticleStore } from '@/src/lib/store';
 import { composeFetchedMaterial, extractHttpUrls, fetchMaterialSources, isGitHubUrl } from '@/src/lib/material-input';
 import { inferAgentId, inferPlatformsFromInstruction } from '@/src/lib/creator-intent';
@@ -15,11 +18,58 @@ const EXAMPLES = ['根据这个链接写一篇克制的新闻解读', '把我的
 export function QuickComposer({ compact = false, onComplete }: { compact?: boolean; onComplete?: () => void }) {
   const router = useRouter();
   const create = useArticleStore((state) => state.create);
+  const config = React.useMemo(() => loadConfig(), []);
   const [input, setInput] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+  const [selectedStyleId, setSelectedStyleId] = React.useState<Voice | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = React.useState<string | null>(null);
+  const [agentMenuOpen, setAgentMenuOpen] = React.useState(false);
+  const [styleMenuOpen, setStyleMenuOpen] = React.useState(false);
+  const [templateMenuOpen, setTemplateMenuOpen] = React.useState(false);
+  const agentMenuRef = React.useRef<HTMLDivElement>(null);
+  const styleMenuRef = React.useRef<HTMLDivElement>(null);
+  const templateMenuRef = React.useRef<HTMLDivElement>(null);
   const urls = React.useMemo(() => extractHttpUrls(input), [input]);
   const githubCount = urls.filter(isGitHubUrl).length;
+
+  React.useEffect(() => {
+    const menus = [
+      { open: agentMenuOpen, ref: agentMenuRef, close: () => setAgentMenuOpen(false) },
+      { open: styleMenuOpen, ref: styleMenuRef, close: () => setStyleMenuOpen(false) },
+      { open: templateMenuOpen, ref: templateMenuRef, close: () => setTemplateMenuOpen(false) },
+    ];
+    const active = menus.filter((menu) => menu.open);
+    if (!active.length) return;
+    const handleClick = (event: MouseEvent) => {
+      for (const menu of active) {
+        if (!menu.ref.current?.contains(event.target as Node)) menu.close();
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [agentMenuOpen, styleMenuOpen, templateMenuOpen]);
+
+  const selectedAgent = selectedAgentId ? AGENTS.find((item) => item.id === selectedAgentId) : null;
+  const effectiveVoice = selectedStyleId ?? selectedAgent?.defaults.voice ?? config.marketStyleId ?? null;
+  const selectedStyle = effectiveVoice ? WRITING_STYLES.find((item) => item.id === effectiveVoice) : null;
+  const selectedTemplate = selectedTemplateId
+    ? WECHAT_TEMPLATES.find((item) => item.id === selectedTemplateId)
+    : WECHAT_TEMPLATES.find((item) => item.id === config.defaultTemplateId);
+
+  const pickAgent = (id: string | null) => {
+    setSelectedAgentId(id);
+    const agent = id ? AGENTS.find((item) => item.id === id) : null;
+    if (agent?.defaults.voice) setSelectedStyleId(agent.defaults.voice);
+    setAgentMenuOpen(false);
+  };
+
+  const closeAllMenus = () => {
+    setAgentMenuOpen(false);
+    setStyleMenuOpen(false);
+    setTemplateMenuOpen(false);
+  };
 
   const submit = async () => {
     if (!input.trim() || submitting) return;
@@ -27,15 +77,15 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
     setError(null);
     try {
       const sources = urls.length ? await fetchMaterialSources(urls) : [];
-      const agentId = inferAgentId(input, urls);
+      const agentId = selectedAgentId ?? inferAgentId(input, urls);
       const agent = AGENTS.find((item) => item.id === agentId) ?? AGENTS[0];
-      const preferredStyle = loadConfig().marketStyleId;
       const requestedPlatforms = inferPlatformsFromInstruction(input);
       const brief = mergeBrief(agent, undefined, {
         material: composeFetchedMaterial(input, urls, sources),
         ...(requestedPlatforms.length > 0 ? { platforms: requestedPlatforms } : {}),
         bilingual: /中英|双语|英文版|English/i.test(input),
-        ...(preferredStyle ? { voice: preferredStyle } : {}),
+        ...(effectiveVoice ? { voice: effectiveVoice } : {}),
+        ...(selectedTemplate ? { templateId: selectedTemplate.id } : {}),
       });
       const article = create(brief);
       useArticleStore.getState().update(article.id, {
@@ -97,9 +147,134 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
         )}
 
         <div className="flex items-center justify-between gap-3 border-t border-ink-line/80 bg-white/70 px-4 py-3 sm:px-5">
-          <div className="inline-flex min-w-0 items-center gap-2 text-xs text-ink-muted">
-            <Sparkles size={13} className="shrink-0 text-indigo-600"/>
-            <span className="truncate">自动理解素材、写法、平台和语言</span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <div ref={agentMenuRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => { setAgentMenuOpen((open) => !open); setStyleMenuOpen(false); setTemplateMenuOpen(false); }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-ink-line/70 bg-white px-2.5 py-1.5 text-xs font-medium text-ink transition-colors hover:border-indigo-300 hover:bg-indigo-50/50"
+              >
+                {selectedAgent ? (
+                  <><span>{selectedAgent.emoji}</span><span className="max-w-20 truncate sm:max-w-32">{selectedAgent.name}</span></>
+                ) : (
+                  <><Sparkles size={13} className="text-indigo-600"/><span>自动</span></>
+                )}
+                <ChevronDown size={12} className={cn('text-ink-muted transition-transform', agentMenuOpen && 'rotate-180')}/>
+              </button>
+              {agentMenuOpen && (
+                <div className="absolute bottom-full left-0 z-30 mb-2 w-60 rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_16px_48px_rgba(79,70,229,0.15)] backdrop-blur-xl">
+                  <button
+                    type="button"
+                    onClick={() => pickAgent(null)}
+                    className={cn(
+                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                      !selectedAgentId ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
+                    )}
+                  >
+                    <Sparkles size={14} className="shrink-0 text-indigo-600"/>
+                    <div>
+                      <p className="font-medium">自动</p>
+                      <p className="text-[10px] text-ink-muted">AI 理解素材并匹配合适写法</p>
+                    </div>
+                  </button>
+                  <div className="my-1 h-px bg-ink-line/50"/>
+                  {AGENTS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => pickAgent(item.id)}
+                      className={cn(
+                        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                        selectedAgentId === item.id ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="shrink-0 text-sm">{item.emoji}</span>
+                      <div className="min-w-0">
+                        <p className="font-medium">{item.name}</p>
+                        <p className="truncate text-[10px] text-ink-muted">{item.tagline}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div ref={styleMenuRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => { closeAllMenus(); setStyleMenuOpen(true); }}
+                className="inline-flex items-center gap-1 rounded-lg border border-ink-line/70 bg-white px-2 py-1.5 text-xs font-medium text-ink transition-colors hover:border-indigo-300 hover:bg-indigo-50/50"
+              >
+                <span className="max-w-14 truncate sm:max-w-20">{selectedStyle ? selectedStyle.name : '风格'}</span>
+                <ChevronDown size={11} className={cn('text-ink-muted transition-transform', styleMenuOpen && 'rotate-180')}/>
+              </button>
+              {styleMenuOpen && (
+                <div className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_16px_48px_rgba(79,70,229,0.15)] backdrop-blur-xl">
+                  {!selectedAgentId && (
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedStyleId(null); setStyleMenuOpen(false); }}
+                      className={cn(
+                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                        !selectedStyleId ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="font-medium">跟随 Agent</span>
+                    </button>
+                  )}
+                  {WRITING_STYLES.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => { setSelectedStyleId(item.id); setStyleMenuOpen(false); }}
+                      className={cn(
+                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                        selectedStyleId === item.id ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="font-medium">{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div ref={templateMenuRef} className="relative hidden shrink-0 sm:block">
+              <button
+                type="button"
+                onClick={() => { closeAllMenus(); setTemplateMenuOpen(true); }}
+                className="inline-flex items-center gap-1 rounded-lg border border-ink-line/70 bg-white px-2 py-1.5 text-xs font-medium text-ink transition-colors hover:border-indigo-300 hover:bg-indigo-50/50"
+              >
+                <Palette size={12} className="text-ink-muted"/>
+                <span className="max-w-14 truncate">{selectedTemplate ? selectedTemplate.name : '模板'}</span>
+                <ChevronDown size={11} className={cn('text-ink-muted transition-transform', templateMenuOpen && 'rotate-180')}/>
+              </button>
+              {templateMenuOpen && (
+                <div className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_16px_48px_rgba(79,70,229,0.15)] backdrop-blur-xl">
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedTemplateId(null); setTemplateMenuOpen(false); }}
+                    className={cn(
+                      'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                      !selectedTemplateId ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
+                    )}
+                  >
+                    <span className="font-medium">跟随全局默认</span>
+                  </button>
+                  {WECHAT_TEMPLATES.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => { setSelectedTemplateId(item.id); setTemplateMenuOpen(false); }}
+                      className={cn(
+                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                        selectedTemplateId === item.id ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
+                      )}
+                    >
+                      <span className="font-medium">{item.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <button
             type="button"
