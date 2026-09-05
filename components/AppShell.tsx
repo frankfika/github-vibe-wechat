@@ -3,9 +3,38 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Blocks, FileText, PenLine, Settings, Trash2 } from 'lucide-react';
+import { Blocks, FileText, PenLine, Plus, Settings, Trash2 } from 'lucide-react';
 import { useArticleStore } from '@/src/lib/store';
+import { CreationLauncherProvider, useCreationLauncher } from './CreationLauncher';
 import { cn } from './ui/cn';
+
+// 侧栏「新建」按钮：必须放在 CreationLauncherProvider 内部才能拿到 context
+function NewContentButton({ iconOnly = false }: { iconOnly?: boolean }) {
+  const { openCreationLauncher } = useCreationLauncher();
+  if (iconOnly) {
+    return (
+      <button
+        type="button"
+        onClick={openCreationLauncher}
+        aria-label="新建内容"
+        title="新建内容"
+        className="h-10 w-10 p-0 inline-flex items-center justify-center gap-1 rounded-md text-ink-muted hover:bg-white hover:text-ink"
+      >
+        <Plus size={14}/>
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={openCreationLauncher}
+      className="flex w-full items-center gap-2 rounded-md bg-white px-2.5 py-2 text-sm font-medium text-indigo-700 shadow-[0_2px_10px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-md"
+    >
+      <Plus size={14} className="text-indigo-600"/>
+      新建内容
+    </button>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -42,6 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [flush]);
 
   return (
+    <CreationLauncherProvider>
     <div className="h-[100dvh] w-full flex flex-col app-workspace-bg">
       <a
         href="#main"
@@ -64,6 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="ml-2 text-[10px] text-indigo-600">AI STUDIO</span>
         </div>
         <div className="p-2 space-y-1">
+          <NewContentButton/>
           <Link
             href="/"
             className={cn(
@@ -147,6 +178,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="xl:hidden flex items-center justify-between gap-3 px-4 h-12 border-b border-white/80 bg-white/80 backdrop-blur-xl shrink-0">
           <Link href="/" className="h-10 shrink-0 font-semibold tracking-tightish inline-flex items-center gap-2"><span className="size-5 rounded-md bg-gradient-to-br from-slate-900 to-indigo-600"/>OmniWriter</Link>
           <div className="flex items-center gap-1 sm:gap-3 text-sm">
+            <NewContentButton iconOnly/>
             <Link href="/" aria-label="创作台" title="创作台" className={cn('h-10 w-10 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink', pathname === '/' ? 'bg-white text-indigo-700' : 'text-ink-muted')}>
               <PenLine size={14}/><span className="hidden sm:inline">创作</span>
             </Link>
@@ -162,5 +194,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     </div>
+    </CreationLauncherProvider>
   );
 }

@@ -6,11 +6,11 @@ import { ArrowUp, ChevronDown, Github, Link2, Loader2, Palette, Sparkles } from 
 import { AGENTS, mergeBrief } from '@/src/lib/agents';
 import { WRITING_STYLES } from '@/src/lib/styles';
 import { WECHAT_TEMPLATES } from '@/src/lib/templates';
-import type { Voice } from '@/src/lib/types';
+import type { CreatorConfig, Voice } from '@/src/lib/types';
 import { useArticleStore } from '@/src/lib/store';
 import { composeFetchedMaterial, extractHttpUrls, fetchMaterialSources, isGitHubUrl } from '@/src/lib/material-input';
 import { inferAgentId, inferPlatformsFromInstruction } from '@/src/lib/creator-intent';
-import { loadConfig } from '@/src/lib/config';
+import { DEFAULT_CONFIG, loadConfig } from '@/src/lib/config';
 import { cn } from './ui/cn';
 
 const EXAMPLES = ['根据这个链接写一篇克制的新闻解读', '把我的 GitHub 项目发到全平台', '只排版下面这篇原稿，不要改写'];
@@ -18,7 +18,9 @@ const EXAMPLES = ['根据这个链接写一篇克制的新闻解读', '把我的
 export function QuickComposer({ compact = false, onComplete }: { compact?: boolean; onComplete?: () => void }) {
   const router = useRouter();
   const create = useArticleStore((state) => state.create);
-  const config = React.useMemo(() => loadConfig(), []);
+  // localStorage 只能在 effect 里读，避免 SSR/客户端渲染不一致（hydration mismatch）
+  const [config, setConfig] = React.useState<CreatorConfig>(DEFAULT_CONFIG);
+  React.useEffect(() => { setConfig(loadConfig()); }, []);
   const [input, setInput] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -42,26 +44,36 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
     ];
     const active = menus.filter((menu) => menu.open);
     if (!active.length) return;
+    // capture 阶段监听：创作弹窗会 stopPropagation 阻断冒泡，bubble 监听收不到点击
     const handleClick = (event: MouseEvent) => {
       for (const menu of active) {
         if (!menu.ref.current?.contains(event.target as Node)) menu.close();
       }
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation(); // 菜单开着时 Escape 只收菜单，不关外层创作弹窗
+      closeAllMenus();
+    };
+    document.addEventListener('mousedown', handleClick, true);
+    document.addEventListener('keydown', handleKey, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClick, true);
+      document.removeEventListener('keydown', handleKey, true);
+    };
   }, [agentMenuOpen, styleMenuOpen, templateMenuOpen]);
 
   const selectedAgent = selectedAgentId ? AGENTS.find((item) => item.id === selectedAgentId) : null;
-  const effectiveVoice = selectedStyleId ?? selectedAgent?.defaults.voice ?? config.marketStyleId ?? null;
+  // 优先级：手动选的风格 > 全局市场风格（跨 Agent 生效）> Agent 自带风格
+  const effectiveVoice = selectedStyleId ?? config.marketStyleId ?? selectedAgent?.defaults.voice ?? null;
   const selectedStyle = effectiveVoice ? WRITING_STYLES.find((item) => item.id === effectiveVoice) : null;
   const selectedTemplate = selectedTemplateId
     ? WECHAT_TEMPLATES.find((item) => item.id === selectedTemplateId)
     : WECHAT_TEMPLATES.find((item) => item.id === config.defaultTemplateId);
 
   const pickAgent = (id: string | null) => {
+    // 不动 selectedStyleId：手动选过的风格不该被 Agent 默认值悄悄覆盖
     setSelectedAgentId(id);
-    const agent = id ? AGENTS.find((item) => item.id === id) : null;
-    if (agent?.defaults.voice) setSelectedStyleId(agent.defaults.voice);
     setAgentMenuOpen(false);
   };
 
@@ -79,16 +91,18 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
       const sources = urls.length ? await fetchMaterialSources(urls) : [];
       const agentId = selectedAgentId ?? inferAgentId(input, urls);
       const agent = AGENTS.find((item) => item.id === agentId) ?? AGENTS[0];
-      const requestedPlatforms = inferPlatformsFromInstruction(input);
+      // 用户显式选了 Agent 时信任其平台预设，不让文本关键词推断悄悄换平台
+      const requestedPlatforms = selectedAgentId ? [] : inferPlatformsFromInstruction(input);
       const brief = mergeBrief(agent, undefined, {
         material: composeFetchedMaterial(input, urls, sources),
         ...(requestedPlatforms.length > 0 ? { platforms: requestedPlatforms } : {}),
         bilingual: /中英|双语|英文版|English/i.test(input),
         ...(effectiveVoice ? { voice: effectiveVoice } : {}),
-        ...(selectedTemplate ? { templateId: selectedTemplate.id } : {}),
       });
       const article = create(brief);
       useArticleStore.getState().update(article.id, {
+        // Brief 没有 templateId 字段，create() 只认全局默认，这里显式落到文章上，否则模板选择不生效
+        ...(selectedTemplate ? { templateId: selectedTemplate.id } : {}),
         conversation: [
           { id: crypto.randomUUID(), role: 'user', content: input.trim(), createdAt: Date.now() },
           {
@@ -155,7 +169,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                 className="inline-flex items-center gap-1.5 rounded-lg border border-ink-line/70 bg-white px-2.5 py-1.5 text-xs font-medium text-ink transition-colors hover:border-indigo-300 hover:bg-indigo-50/50"
               >
                 {selectedAgent ? (
-                  <><span>{selectedAgent.emoji}</span><span className="max-w-20 truncate sm:max-w-32">{selectedAgent.name}</span></>
+                  <><span>{selectedAgent.emoji}</span><span className="max-w-14 truncate sm:max-w-32">{selectedAgent.name}</span></>
                 ) : (
                   <><Sparkles size={13} className="text-indigo-600"/><span>自动</span></>
                 )}
@@ -209,18 +223,20 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
               </button>
               {styleMenuOpen && (
                 <div className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_16px_48px_rgba(79,70,229,0.15)] backdrop-blur-xl">
-                  {!selectedAgentId && (
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedStyleId(null); setStyleMenuOpen(false); }}
-                      className={cn(
-                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors',
-                        !selectedStyleId ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
-                      )}
-                    >
-                      <span className="font-medium">跟随 Agent</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedStyleId(null); setStyleMenuOpen(false); }}
+                    className={cn(
+                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                      !selectedStyleId ? 'bg-indigo-50 text-indigo-700' : 'text-ink hover:bg-slate-50',
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">{config.marketStyleId ? '跟随全局风格' : '跟随 Agent'}</p>
+                      {/* 没手动选时，显示实际会生效的风格，让"跟随"落到什么一目了然 */}
+                      {!selectedStyleId && selectedStyle && <p className="truncate text-[10px] text-ink-muted">当前：{selectedStyle.name}</p>}
+                    </div>
+                  </button>
                   {WRITING_STYLES.map((item) => (
                     <button
                       key={item.id}
@@ -237,7 +253,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                 </div>
               )}
             </div>
-            <div ref={templateMenuRef} className="relative hidden shrink-0 sm:block">
+            <div ref={templateMenuRef} className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => { closeAllMenus(); setTemplateMenuOpen(true); }}
@@ -253,11 +269,15 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                     type="button"
                     onClick={() => { setSelectedTemplateId(null); setTemplateMenuOpen(false); }}
                     className={cn(
-                      'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors',
-                      !selectedTemplateId ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
+                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                      !selectedTemplateId ? 'bg-indigo-50 text-indigo-700' : 'text-ink hover:bg-slate-50',
                     )}
                   >
-                    <span className="font-medium">跟随全局默认</span>
+                    <div className="min-w-0">
+                      <p className="font-medium">跟随全局默认</p>
+                      {/* 没手动选时，显示实际会生效的模板 */}
+                      {!selectedTemplateId && selectedTemplate && <p className="truncate text-[10px] text-ink-muted">当前：{selectedTemplate.name}</p>}
+                    </div>
                   </button>
                   {WECHAT_TEMPLATES.map((item) => (
                     <button
@@ -280,10 +300,11 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
             type="button"
             onClick={() => void submit()}
             disabled={!input.trim() || submitting}
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-700 px-4 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md disabled:pointer-events-none disabled:opacity-40 sm:size-10 sm:px-0"
+            className="inline-flex size-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-700 text-white shadow-sm transition-all hover:shadow-md disabled:pointer-events-none disabled:opacity-40"
             aria-label="开始创作"
+            title={submitting ? '正在读取素材' : '开始创作'}
           >
-            {submitting ? <Loader2 size={16} className="animate-spin"/> : <ArrowUp size={17}/>}<span className="sm:hidden">{submitting ? '正在读取素材' : '开始创作'}</span>
+            {submitting ? <Loader2 size={16} className="animate-spin"/> : <ArrowUp size={17}/>}
           </button>
         </div>
       </div>
